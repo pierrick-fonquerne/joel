@@ -1,6 +1,8 @@
 //! Joel HTTP API: router assembly and HTTP adapters.
 
 use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
@@ -24,15 +26,17 @@ pub fn build_router(pool: PgPool) -> Router {
         .with_state(pool)
 }
 
-async fn healthz(State(pool): State<PgPool>) -> Json<Health> {
-    let db = if persistence::ping(&pool).await.is_ok() {
-        "up"
+async fn healthz(State(pool): State<PgPool>) -> impl IntoResponse {
+    let db_up = persistence::ping(&pool).await.is_ok();
+    let status_code = if db_up {
+        StatusCode::OK
     } else {
-        "down"
+        StatusCode::SERVICE_UNAVAILABLE
     };
-    Json(Health {
-        status: "ok",
-        db,
+    let payload = Health {
+        status: if db_up { "ok" } else { "degraded" },
+        db: if db_up { "up" } else { "down" },
         version: env!("CARGO_PKG_VERSION"),
-    })
+    };
+    (status_code, Json(payload))
 }
