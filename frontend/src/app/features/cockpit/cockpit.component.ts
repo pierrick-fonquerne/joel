@@ -8,9 +8,9 @@ import type { Health } from '../../core/api';
   template: `
     <h2>Cockpit</h2>
     @if (health(); as h) {
-      <p>Joel est operationnel - api v{{ h.version }}, base {{ h.db }}.</p>
+      <p>Joel est opérationnel - api v{{ h.version }}, base {{ h.db }}.</p>
     } @else {
-      <p>Connexion a l'api...</p>
+      <p>Connexion à l'api...</p>
     }
   `,
 })
