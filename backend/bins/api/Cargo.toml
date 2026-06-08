@@ -25,6 +25,8 @@ time = "0.3"
 uuid = { version = "1", features = ["v4", "serde"] }
 webauthn-rs = { version = "0.5", features = ["conditional-ui"] }
 url = "2"
+rand = "0.9"
+base64 = "0.22"
 
 [dev-dependencies]
 domain = { path = "../../crates/domain" }
