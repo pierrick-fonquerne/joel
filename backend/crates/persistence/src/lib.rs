@@ -1,5 +1,7 @@
 //! `PostgreSQL` adapters for the Joel domain ports.
 
+pub mod auth;
+
 use sqlx::PgPool;
 
 /// Verifies database connectivity with a trivial round-trip query.
