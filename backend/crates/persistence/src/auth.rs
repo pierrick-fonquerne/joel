@@ -151,17 +151,24 @@ impl PgCredentials {
 
 #[async_trait]
 impl CredentialRepository for PgCredentials {
-    async fn insert(&self, user_id: Uuid, label: &str, credential_json: &str) -> Result<(), AuthError> {
+    async fn insert(
+        &self,
+        user_id: Uuid,
+        label: &str,
+        credential_json: &str,
+    ) -> Result<(), AuthError> {
         let value: serde_json::Value =
             serde_json::from_str(credential_json).map_err(|e| AuthError::Storage(e.to_string()))?;
-        sqlx::query("INSERT INTO webauthn_credential (user_id, label, credential) VALUES ($1, $2, $3)")
-            .bind(user_id)
-            .bind(label)
-            .bind(value)
-            .execute(&self.pool)
-            .await
-            .map(|_| ())
-            .map_err(|e| storage(&e))
+        sqlx::query(
+            "INSERT INTO webauthn_credential (user_id, label, credential) VALUES ($1, $2, $3)",
+        )
+        .bind(user_id)
+        .bind(label)
+        .bind(value)
+        .execute(&self.pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| storage(&e))
     }
 
     async fn for_user(&self, user_id: Uuid) -> Result<Vec<String>, AuthError> {
@@ -193,14 +200,13 @@ impl PgAudit {
 #[async_trait]
 impl AuditSink for PgAudit {
     async fn record(&self, user_id: Option<Uuid>, action: &str, detail: serde_json::Value) {
-        let _unused = sqlx::query(
-            "INSERT INTO audit_log (user_id, action, detail) VALUES ($1, $2, $3)",
-        )
-        .bind(user_id)
-        .bind(action)
-        .bind(detail)
-        .execute(&self.pool)
-        .await;
+        let _unused =
+            sqlx::query("INSERT INTO audit_log (user_id, action, detail) VALUES ($1, $2, $3)")
+                .bind(user_id)
+                .bind(action)
+                .bind(detail)
+                .execute(&self.pool)
+                .await;
     }
 }
 
@@ -231,9 +237,20 @@ mod tests {
         let repo = PgUsers::new(pool);
         let user = sample_user();
         repo.insert(&user).await.unwrap();
-        assert_eq!(repo.find_by_email(&user.email).await.unwrap().unwrap().id, user.id);
-        assert_eq!(repo.find_by_id(user.id).await.unwrap().unwrap().email, user.email);
-        assert!(repo.find_by_email("absent@example.com").await.unwrap().is_none());
+        assert_eq!(
+            repo.find_by_email(&user.email).await.unwrap().unwrap().id,
+            user.id
+        );
+        assert_eq!(
+            repo.find_by_id(user.id).await.unwrap().unwrap().email,
+            user.email
+        );
+        assert!(
+            repo.find_by_email("absent@example.com")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[sqlx::test(migrations = "../../migrations")]
@@ -261,7 +278,9 @@ mod tests {
         users.insert(&user).await.unwrap();
 
         let repo = PgCredentials::new(pool);
-        repo.insert(user.id, "iPhone", r#"{"cred":"a"}"#).await.unwrap();
+        repo.insert(user.id, "iPhone", r#"{"cred":"a"}"#)
+            .await
+            .unwrap();
         repo.insert(user.id, "PC", r#"{"cred":"b"}"#).await.unwrap();
         assert_eq!(repo.for_user(user.id).await.unwrap().len(), 2);
     }
@@ -269,8 +288,12 @@ mod tests {
     #[sqlx::test(migrations = "../../migrations")]
     async fn audit_records_do_not_fail(pool: PgPool) {
         let sink = PgAudit::new(pool.clone());
-        sink.record(None, "test.event", serde_json::json!({ "k": 1 })).await;
-        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_log").fetch_one(&pool).await.unwrap();
+        sink.record(None, "test.event", serde_json::json!({ "k": 1 }))
+            .await;
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_log")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(count, 1);
     }
 }

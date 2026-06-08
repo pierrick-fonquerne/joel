@@ -1,8 +1,8 @@
 //! HTTP adapters for the authentication use cases.
 
 use axum::extract::{FromRequestParts, State};
-use axum::http::request::Parts;
 use axum::http::StatusCode;
+use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -42,9 +42,15 @@ pub struct CurrentUser(pub User);
 impl FromRequestParts<AppState> for CurrentUser {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_headers(&parts.headers);
-        let token = jar.get(SESSION_COOKIE).map(|c| c.value().to_owned()).ok_or(StatusCode::UNAUTHORIZED)?;
+        let token = jar
+            .get(SESSION_COOKIE)
+            .map(|c| c.value().to_owned())
+            .ok_or(StatusCode::UNAUTHORIZED)?;
         state
             .auth
             .validate_session(&token, OffsetDateTime::now_utc())
@@ -73,8 +79,21 @@ pub fn session_cookie(issued: &IssuedSession) -> Cookie<'static> {
     cookie
 }
 
-async fn login(State(state): State<AppState>, jar: CookieJar, Json(body): Json<LoginRequest>) -> Response {
-    match state.auth.password_login(&body.email, &body.password, &body.totp, OffsetDateTime::now_utc()).await {
+async fn login(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(body): Json<LoginRequest>,
+) -> Response {
+    match state
+        .auth
+        .password_login(
+            &body.email,
+            &body.password,
+            &body.totp,
+            OffsetDateTime::now_utc(),
+        )
+        .await
+    {
         Ok(issued) => (jar.add(session_cookie(&issued)), StatusCode::OK).into_response(),
         Err(error) => auth_error_response(&error).into_response(),
     }
@@ -86,11 +105,18 @@ async fn logout(State(state): State<AppState>, jar: CookieJar) -> Response {
     {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    (jar.remove(Cookie::from(SESSION_COOKIE)), StatusCode::NO_CONTENT).into_response()
+    (
+        jar.remove(Cookie::from(SESSION_COOKIE)),
+        StatusCode::NO_CONTENT,
+    )
+        .into_response()
 }
 
 async fn me(CurrentUser(user): CurrentUser) -> Json<Identity> {
-    Json(Identity { email: user.email, display_name: user.display_name })
+    Json(Identity {
+        email: user.email,
+        display_name: user.display_name,
+    })
 }
 
 /// Routes under `/api/auth`.

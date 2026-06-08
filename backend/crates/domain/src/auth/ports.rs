@@ -31,7 +31,12 @@ pub trait SessionRepository: Send + Sync {
 #[async_trait]
 pub trait CredentialRepository: Send + Sync {
     /// Persists a passkey for a user under a human-readable label.
-    async fn insert(&self, user_id: Uuid, label: &str, credential_json: &str) -> Result<(), AuthError>;
+    async fn insert(
+        &self,
+        user_id: Uuid,
+        label: &str,
+        credential_json: &str,
+    ) -> Result<(), AuthError>;
     /// Returns all passkeys of a user as raw JSON documents.
     async fn for_user(&self, user_id: Uuid) -> Result<Vec<String>, AuthError>;
 }

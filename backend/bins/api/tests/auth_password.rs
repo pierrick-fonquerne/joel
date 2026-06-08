@@ -1,8 +1,13 @@
 //! Integration tests for password + TOTP login and the session middleware.
-#![allow(clippy::unwrap_used, clippy::missing_panics_doc, clippy::must_use_candidate, missing_docs)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::missing_panics_doc,
+    clippy::must_use_candidate,
+    missing_docs
+)]
 
 use axum::body::Body;
-use axum::http::{header, Request, StatusCode};
+use axum::http::{Request, StatusCode, header};
 use domain::auth::crypto::{PasswordService, SecretBox, TotpService};
 use domain::auth::model::User;
 use domain::auth::ports::UserRepository;
@@ -62,12 +67,23 @@ async fn login_sets_cookie_and_me_returns_identity(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(login.status(), StatusCode::OK);
-    let cookie = login.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().to_owned();
+    let cookie = login
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     assert!(cookie.contains("joel_session="));
     assert!(cookie.contains("HttpOnly"));
 
     let me = app
-        .oneshot(Request::get("/api/auth/me").header(header::COOKIE, cookie.split(';').next().unwrap()).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get("/api/auth/me")
+                .header(header::COOKIE, cookie.split(';').next().unwrap())
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(me.status(), StatusCode::OK);
@@ -86,14 +102,19 @@ async fn bad_credentials_yield_401_and_me_requires_session(pool: PgPool) {
         .oneshot(
             Request::post("/api/auth/login")
                 .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(r#"{"email":"pierrick@example.com","password":"wrong","totp":"000000"}"#))
+                .body(Body::from(
+                    r#"{"email":"pierrick@example.com","password":"wrong","totp":"000000"}"#,
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(login.status(), StatusCode::UNAUTHORIZED);
 
-    let me = app.oneshot(Request::get("/api/auth/me").body(Body::empty()).unwrap()).await.unwrap();
+    let me = app
+        .oneshot(Request::get("/api/auth/me").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
     assert_eq!(me.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -115,15 +136,37 @@ async fn logout_invalidates_the_cookie(pool: PgPool) {
         )
         .await
         .unwrap();
-    let cookie = login.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().split(';').next().unwrap().to_owned();
+    let cookie = login
+        .headers()
+        .get(header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
 
     let logout = app
         .clone()
-        .oneshot(Request::post("/api/auth/logout").header(header::COOKIE, &cookie).body(Body::empty()).unwrap())
+        .oneshot(
+            Request::post("/api/auth/logout")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(logout.status(), StatusCode::NO_CONTENT);
 
-    let me = app.oneshot(Request::get("/api/auth/me").header(header::COOKIE, &cookie).body(Body::empty()).unwrap()).await.unwrap();
+    let me = app
+        .oneshot(
+            Request::get("/api/auth/me")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(me.status(), StatusCode::UNAUTHORIZED);
 }

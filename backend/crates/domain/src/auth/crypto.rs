@@ -2,9 +2,9 @@
 
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
+use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng as ArgonRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use rand::RngCore;
@@ -32,8 +32,11 @@ impl PasswordService {
     /// Verifies a password against a stored PHC string.
     #[must_use]
     pub fn verify(password: &str, stored: &str) -> bool {
-        PasswordHash::new(stored)
-            .is_ok_and(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())
+        PasswordHash::new(stored).is_ok_and(|parsed| {
+            Argon2::default()
+                .verify_password(password.as_bytes(), &parsed)
+                .is_ok()
+        })
     }
 }
 
@@ -50,8 +53,16 @@ impl TotpService {
     }
 
     fn totp(secret: &[u8], account: &str) -> Result<TOTP, AuthError> {
-        TOTP::new(Algorithm::SHA1, 6, 1, 30, secret.to_vec(), Some("Joel".to_owned()), account.to_owned())
-            .map_err(|_| AuthError::Crypto)
+        TOTP::new(
+            Algorithm::SHA1,
+            6,
+            1,
+            30,
+            secret.to_vec(),
+            Some("Joel".to_owned()),
+            account.to_owned(),
+        )
+        .map_err(|_| AuthError::Crypto)
     }
 
     /// Computes the code for the given unix timestamp (test and seeding helper).
@@ -100,7 +111,9 @@ impl SecretBox {
     /// # Errors
     /// Returns [`AuthError::Crypto`] when the key is not 32 bytes of valid base64.
     pub fn from_base64(key_b64: &str) -> Result<Self, AuthError> {
-        let bytes = STANDARD.decode(key_b64.trim()).map_err(|_| AuthError::Crypto)?;
+        let bytes = STANDARD
+            .decode(key_b64.trim())
+            .map_err(|_| AuthError::Crypto)?;
         let key: [u8; 32] = bytes.try_into().map_err(|_| AuthError::Crypto)?;
         Ok(Self::new(key))
     }
@@ -128,7 +141,9 @@ impl SecretBox {
         }
         let (nonce, ciphertext) = sealed.split_at(12);
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&self.key));
-        cipher.decrypt(Nonce::from_slice(nonce), ciphertext).map_err(|_| AuthError::Crypto)
+        cipher
+            .decrypt(Nonce::from_slice(nonce), ciphertext)
+            .map_err(|_| AuthError::Crypto)
     }
 }
 
@@ -162,7 +177,10 @@ mod tests {
     #[test]
     fn password_roundtrip_verifies() {
         let hash = PasswordService::hash("correct horse battery staple").unwrap();
-        assert!(PasswordService::verify("correct horse battery staple", &hash));
+        assert!(PasswordService::verify(
+            "correct horse battery staple",
+            &hash
+        ));
         assert!(!PasswordService::verify("wrong", &hash));
     }
 

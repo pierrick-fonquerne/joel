@@ -36,7 +36,10 @@ struct ApiDoc;
 ///
 /// # Errors
 /// Propagates [`domain::auth::model::AuthError`] when crypto material is invalid.
-pub fn build_router_with(pool: PgPool, config: &Config) -> Result<Router, domain::auth::model::AuthError> {
+pub fn build_router_with(
+    pool: PgPool,
+    config: &Config,
+) -> Result<Router, domain::auth::model::AuthError> {
     let state = AppState::build(pool, config)?;
     Ok(Router::new()
         .route("/api/healthz", get(healthz))

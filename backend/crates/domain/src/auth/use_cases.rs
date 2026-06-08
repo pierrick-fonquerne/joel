@@ -27,7 +27,13 @@ impl Auth {
         secret_box: SecretBox,
         session_ttl_days: i64,
     ) -> Self {
-        Self { users, sessions, audit, secret_box, session_ttl_days }
+        Self {
+            users,
+            sessions,
+            audit,
+            secret_box,
+            session_ttl_days,
+        }
     }
 
     /// Authenticates with email + password + TOTP and issues a session.
@@ -42,21 +48,37 @@ impl Auth {
         now: OffsetDateTime,
     ) -> Result<IssuedSession, AuthError> {
         let Some(user) = self.users.find_by_email(email).await? else {
-            self.audit.record(None, "auth.login.unknown_email", serde_json::json!({ "email": email })).await;
+            self.audit
+                .record(
+                    None,
+                    "auth.login.unknown_email",
+                    serde_json::json!({ "email": email }),
+                )
+                .await;
             return Err(AuthError::InvalidCredentials);
         };
         if !PasswordService::verify(password, &user.password_hash) {
-            self.audit.record(Some(user.id), "auth.login.bad_password", serde_json::json!({})).await;
+            self.audit
+                .record(
+                    Some(user.id),
+                    "auth.login.bad_password",
+                    serde_json::json!({}),
+                )
+                .await;
             return Err(AuthError::InvalidCredentials);
         }
         let secret = self.secret_box.open(&user.totp_secret_enc)?;
         let now_unix = u64::try_from(now.unix_timestamp()).map_err(|_| AuthError::Crypto)?;
         if !TotpService::verify(&secret, totp_code, now_unix) {
-            self.audit.record(Some(user.id), "auth.login.bad_totp", serde_json::json!({})).await;
+            self.audit
+                .record(Some(user.id), "auth.login.bad_totp", serde_json::json!({}))
+                .await;
             return Err(AuthError::InvalidCredentials);
         }
         let issued = self.issue_session(user.id, now).await?;
-        self.audit.record(Some(user.id), "auth.login.password", serde_json::json!({})).await;
+        self.audit
+            .record(Some(user.id), "auth.login.password", serde_json::json!({}))
+            .await;
         Ok(issued)
     }
 
@@ -64,10 +86,20 @@ impl Auth {
     ///
     /// # Errors
     /// Propagates storage failures.
-    pub async fn issue_session(&self, user_id: uuid::Uuid, now: OffsetDateTime) -> Result<IssuedSession, AuthError> {
+    pub async fn issue_session(
+        &self,
+        user_id: uuid::Uuid,
+        now: OffsetDateTime,
+    ) -> Result<IssuedSession, AuthError> {
         let (token, token_hash) = SessionToken::generate();
         let expires_at = now + Duration::days(self.session_ttl_days);
-        self.sessions.insert(&Session { token_hash, user_id, expires_at }).await?;
+        self.sessions
+            .insert(&Session {
+                token_hash,
+                user_id,
+                expires_at,
+            })
+            .await?;
         Ok(IssuedSession { token, expires_at })
     }
 
@@ -75,7 +107,11 @@ impl Auth {
     ///
     /// # Errors
     /// [`AuthError::NotAuthenticated`] when absent or expired.
-    pub async fn validate_session(&self, token: &str, now: OffsetDateTime) -> Result<User, AuthError> {
+    pub async fn validate_session(
+        &self,
+        token: &str,
+        now: OffsetDateTime,
+    ) -> Result<User, AuthError> {
         let hash = SessionToken::hash(token);
         let Some(session) = self.sessions.find(hash).await? else {
             return Err(AuthError::NotAuthenticated);
@@ -84,7 +120,10 @@ impl Auth {
             self.sessions.delete(hash).await?;
             return Err(AuthError::NotAuthenticated);
         }
-        self.users.find_by_id(session.user_id).await?.ok_or(AuthError::NotAuthenticated)
+        self.users
+            .find_by_id(session.user_id)
+            .await?
+            .ok_or(AuthError::NotAuthenticated)
     }
 
     /// Destroys the session associated with the token, when present.
@@ -126,7 +165,13 @@ mod tests {
             })
             .await
             .unwrap();
-        let auth = Auth::new(users, Arc::new(FakeSessions::default()), Arc::new(NoopAudit), SecretBox::new(KEY), 30);
+        let auth = Auth::new(
+            users,
+            Arc::new(FakeSessions::default()),
+            Arc::new(NoopAudit),
+            SecretBox::new(KEY),
+            30,
+        );
         (auth, secret)
     }
 
@@ -139,7 +184,10 @@ mod tests {
         let (auth, secret) = seeded().await;
         let code = TotpService::current_code(&secret, 1_780_000_000).unwrap();
 
-        let issued = auth.password_login("pierrick@example.com", "hunter2hunter2", &code, now()).await.unwrap();
+        let issued = auth
+            .password_login("pierrick@example.com", "hunter2hunter2", &code, now())
+            .await
+            .unwrap();
         let user = auth.validate_session(&issued.token, now()).await.unwrap();
         assert_eq!(user.email, "pierrick@example.com");
     }
@@ -149,8 +197,12 @@ mod tests {
         let (auth, secret) = seeded().await;
         let code = TotpService::current_code(&secret, 1_780_000_000).unwrap();
 
-        let wrong_pwd = auth.password_login("pierrick@example.com", "nope", &code, now()).await;
-        let wrong_totp = auth.password_login("pierrick@example.com", "hunter2hunter2", "000000", now()).await;
+        let wrong_pwd = auth
+            .password_login("pierrick@example.com", "nope", &code, now())
+            .await;
+        let wrong_totp = auth
+            .password_login("pierrick@example.com", "hunter2hunter2", "000000", now())
+            .await;
         assert!(matches!(wrong_pwd, Err(AuthError::InvalidCredentials)));
         assert!(matches!(wrong_totp, Err(AuthError::InvalidCredentials)));
     }
@@ -158,7 +210,9 @@ mod tests {
     #[tokio::test]
     async fn unknown_email_yields_invalid_credentials_not_a_distinct_error() {
         let (auth, _) = seeded().await;
-        let result = auth.password_login("ghost@example.com", "x", "000000", now()).await;
+        let result = auth
+            .password_login("ghost@example.com", "x", "000000", now())
+            .await;
         assert!(matches!(result, Err(AuthError::InvalidCredentials)));
     }
 
@@ -166,19 +220,31 @@ mod tests {
     async fn expired_session_is_rejected() {
         let (auth, secret) = seeded().await;
         let code = TotpService::current_code(&secret, 1_780_000_000).unwrap();
-        let issued = auth.password_login("pierrick@example.com", "hunter2hunter2", &code, now()).await.unwrap();
+        let issued = auth
+            .password_login("pierrick@example.com", "hunter2hunter2", &code, now())
+            .await
+            .unwrap();
 
         let later = now() + time::Duration::days(31);
-        assert!(matches!(auth.validate_session(&issued.token, later).await, Err(AuthError::NotAuthenticated)));
+        assert!(matches!(
+            auth.validate_session(&issued.token, later).await,
+            Err(AuthError::NotAuthenticated)
+        ));
     }
 
     #[tokio::test]
     async fn logout_invalidates_the_session() {
         let (auth, secret) = seeded().await;
         let code = TotpService::current_code(&secret, 1_780_000_000).unwrap();
-        let issued = auth.password_login("pierrick@example.com", "hunter2hunter2", &code, now()).await.unwrap();
+        let issued = auth
+            .password_login("pierrick@example.com", "hunter2hunter2", &code, now())
+            .await
+            .unwrap();
 
         auth.logout(&issued.token).await.unwrap();
-        assert!(matches!(auth.validate_session(&issued.token, now()).await, Err(AuthError::NotAuthenticated)));
+        assert!(matches!(
+            auth.validate_session(&issued.token, now()).await,
+            Err(AuthError::NotAuthenticated)
+        ));
     }
 }

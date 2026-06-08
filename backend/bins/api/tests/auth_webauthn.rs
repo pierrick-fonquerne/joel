@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::body::Body;
-use axum::http::{header, Request, StatusCode};
+use axum::http::{Request, StatusCode, header};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -14,7 +14,11 @@ mod common;
 async fn register_start_requires_a_session(pool: PgPool) {
     let app = api::build_router_with(pool, &common::test_config()).unwrap();
     let response = app
-        .oneshot(Request::post("/api/auth/webauthn/register/start").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::post("/api/auth/webauthn/register/start")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -24,7 +28,11 @@ async fn register_start_requires_a_session(pool: PgPool) {
 async fn login_start_returns_a_challenge(pool: PgPool) {
     let app = api::build_router_with(pool, &common::test_config()).unwrap();
     let response = app
-        .oneshot(Request::post("/api/auth/webauthn/login/start").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::post("/api/auth/webauthn/login/start")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);

@@ -43,7 +43,10 @@ async fn seed_admin(pool: sqlx::PgPool, config: &api::Config, email: &str, displ
     let otpauth = TotpService::otpauth_url(&totp_secret, email).unwrap_or_default();
     println!("user created: {email}");
     println!("initial password: {password}");
-    println!("totp secret (base32): {}", TotpService::secret_base32(&totp_secret));
+    println!(
+        "totp secret (base32): {}",
+        TotpService::secret_base32(&totp_secret)
+    );
     println!("otpauth url: {otpauth}");
     println!("Add the TOTP secret to your authenticator app, log in, then register a passkey.");
 }

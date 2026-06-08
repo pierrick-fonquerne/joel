@@ -10,7 +10,9 @@ use persistence::auth::{PgAudit, PgCredentials, PgSessions, PgUsers};
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use webauthn_rs::prelude::{DiscoverableAuthentication, PasskeyRegistration, Url, Webauthn, WebauthnBuilder};
+use webauthn_rs::prelude::{
+    DiscoverableAuthentication, PasskeyRegistration, Url, Webauthn, WebauthnBuilder,
+};
 
 /// Runtime configuration, sourced from the environment.
 pub struct Config {
@@ -35,7 +37,10 @@ impl Config {
             master_key_b64: need("MASTER_KEY")?,
             webauthn_rp_id: need("WEBAUTHN_RP_ID")?,
             webauthn_origin: need("WEBAUTHN_ORIGIN")?,
-            session_ttl_days: need("SESSION_TTL_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(30),
+            session_ttl_days: need("SESSION_TTL_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30),
         })
     }
 }

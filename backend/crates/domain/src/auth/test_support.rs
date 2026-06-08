@@ -19,13 +19,27 @@ pub struct FakeUsers {
 #[async_trait]
 impl UserRepository for FakeUsers {
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, AuthError> {
-        Ok(self.users.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.values().find(|u| u.email == email).cloned())
+        Ok(self
+            .users
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .values()
+            .find(|u| u.email == email)
+            .cloned())
     }
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, AuthError> {
-        Ok(self.users.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.get(&id).cloned())
+        Ok(self
+            .users
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .get(&id)
+            .cloned())
     }
     async fn insert(&self, user: &User) -> Result<(), AuthError> {
-        self.users.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.insert(user.id, user.clone());
+        self.users
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .insert(user.id, user.clone());
         Ok(())
     }
 }
@@ -40,14 +54,25 @@ pub struct FakeSessions {
 #[async_trait]
 impl SessionRepository for FakeSessions {
     async fn insert(&self, session: &Session) -> Result<(), AuthError> {
-        self.sessions.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.insert(session.token_hash, session.clone());
+        self.sessions
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .insert(session.token_hash, session.clone());
         Ok(())
     }
     async fn find(&self, token_hash: [u8; 32]) -> Result<Option<Session>, AuthError> {
-        Ok(self.sessions.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.get(&token_hash).cloned())
+        Ok(self
+            .sessions
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .get(&token_hash)
+            .cloned())
     }
     async fn delete(&self, token_hash: [u8; 32]) -> Result<(), AuthError> {
-        self.sessions.lock().map_err(|_| AuthError::Storage("poisoned".into()))?.remove(&token_hash);
+        self.sessions
+            .lock()
+            .map_err(|_| AuthError::Storage("poisoned".into()))?
+            .remove(&token_hash);
         Ok(())
     }
 }
