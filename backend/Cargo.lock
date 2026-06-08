@@ -400,6 +400,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "time",
+ "tokio",
  "totp-rs",
  "uuid",
 ]
