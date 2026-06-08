@@ -47,7 +47,11 @@ async fn healthz_reports_db_up(pool: PgPool) {
 async fn openapi_spec_is_served(pool: PgPool) {
     let app = api::build_router(pool);
     let response = app
-        .oneshot(Request::get("/api/openapi.json").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::get("/api/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
