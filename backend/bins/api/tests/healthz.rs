@@ -7,13 +7,22 @@ use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tower::ServiceExt;
 
+fn test_config() -> api::Config {
+    api::Config {
+        master_key_b64: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=".to_owned(),
+        webauthn_rp_id: "localhost".to_owned(),
+        webauthn_origin: "http://localhost:4200".to_owned(),
+        session_ttl_days: 30,
+    }
+}
+
 #[tokio::test]
 async fn healthz_reports_degraded_with_503_when_db_unreachable() {
     let pool = sqlx::postgres::PgPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_millis(200))
         .connect_lazy("postgres://joel:wrong@127.0.0.1:59999/joel")
         .unwrap();
-    let app = api::build_router(pool);
+    let app = api::build_router_with(pool, &test_config()).unwrap();
 
     let response = app
         .oneshot(Request::get("/api/healthz").body(Body::empty()).unwrap())
@@ -29,7 +38,7 @@ async fn healthz_reports_degraded_with_503_when_db_unreachable() {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn healthz_reports_db_up(pool: PgPool) {
-    let app = api::build_router(pool);
+    let app = api::build_router_with(pool, &test_config()).unwrap();
 
     let response = app
         .oneshot(Request::get("/api/healthz").body(Body::empty()).unwrap())
@@ -45,7 +54,7 @@ async fn healthz_reports_db_up(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn openapi_spec_is_served(pool: PgPool) {
-    let app = api::build_router(pool);
+    let app = api::build_router_with(pool, &test_config()).unwrap();
     let response = app
         .oneshot(
             Request::get("/api/openapi.json")

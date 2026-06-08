@@ -1,5 +1,10 @@
 //! Joel HTTP API: router assembly and HTTP adapters.
 
+pub mod auth_routes;
+pub mod state;
+
+pub use state::Config;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -8,6 +13,8 @@ use axum::{Json, Router};
 use serde::Serialize;
 use sqlx::PgPool;
 use utoipa::{OpenApi, ToSchema};
+
+use crate::state::AppState;
 
 /// Health status payload returned by the health endpoint.
 #[derive(Serialize, ToSchema)]
@@ -24,16 +31,20 @@ pub struct Health {
 #[openapi(info(title = "Joel API"), paths(healthz), components(schemas(Health)))]
 struct ApiDoc;
 
-/// Builds the application router with all HTTP routes.
-#[must_use = "the router must be passed to an Axum server"]
-pub fn build_router(pool: PgPool) -> Router {
-    Router::new()
+/// Builds the application router from a pool and explicit configuration.
+///
+/// # Errors
+/// Propagates [`domain::auth::model::AuthError`] when crypto material is invalid.
+pub fn build_router_with(pool: PgPool, config: &Config) -> Result<Router, domain::auth::model::AuthError> {
+    let state = AppState::build(pool, config)?;
+    Ok(Router::new()
         .route("/api/healthz", get(healthz))
         .route(
             "/api/openapi.json",
             get(|| async { Json(ApiDoc::openapi()) }),
         )
-        .with_state(pool)
+        .merge(auth_routes::router())
+        .with_state(state))
 }
 
 /// Reports liveness of the api process and its database connection.
@@ -45,8 +56,8 @@ pub fn build_router(pool: PgPool) -> Router {
         (status = 503, body = Health, description = "Service degraded")
     )
 )]
-async fn healthz(State(pool): State<PgPool>) -> impl IntoResponse {
-    let db_up = persistence::ping(&pool).await.is_ok();
+async fn healthz(State(state): State<AppState>) -> impl IntoResponse {
+    let db_up = persistence::ping(&state.pool).await.is_ok();
     let status_code = if db_up {
         StatusCode::OK
     } else {

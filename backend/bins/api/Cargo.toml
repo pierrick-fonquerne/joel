@@ -12,6 +12,7 @@ workspace = true
 domain = { path = "../../crates/domain" }
 persistence = { path = "../../crates/persistence" }
 axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie"] }
 utoipa = { version = "5", features = ["axum_extras"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 serde = { version = "1", features = ["derive"] }
@@ -20,7 +21,12 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres"]
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+time = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+webauthn-rs = { version = "0.5", features = ["conditional-ui"] }
+url = "2"
 
 [dev-dependencies]
+domain = { path = "../../crates/domain" }
 http-body-util = "0.1"
 tower = "0.5"

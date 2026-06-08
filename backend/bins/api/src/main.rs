@@ -23,6 +23,22 @@ async fn main() {
         }
     };
 
+    let config = match api::Config::from_env() {
+        Ok(config) => config,
+        Err(missing) => {
+            tracing::error!(variable = %missing, "required environment variable is not set");
+            std::process::exit(1);
+        }
+    };
+
+    let app = match api::build_router_with(pool, &config) {
+        Ok(router) => router.layer(tower_http::trace::TraceLayer::new_for_http()),
+        Err(error) => {
+            tracing::error!(%error, "failed to build application router");
+            std::process::exit(1);
+        }
+    };
+
     let bind = std::env::var("APP_BIND").unwrap_or_else(|_| "0.0.0.0:8080".to_owned());
     let listener = match tokio::net::TcpListener::bind(&bind).await {
         Ok(listener) => listener,
@@ -33,7 +49,6 @@ async fn main() {
     };
     tracing::info!(%bind, "api listening");
 
-    let app = api::build_router(pool).layer(tower_http::trace::TraceLayer::new_for_http());
     if let Err(error) = axum::serve(listener, app).await {
         tracing::error!(%error, "server stopped unexpectedly");
         std::process::exit(1);
