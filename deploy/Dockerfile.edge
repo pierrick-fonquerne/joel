@@ -1,0 +1,17 @@
+FROM node:22-alpine AS front
+WORKDIR /build
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+FROM caddy:2-builder AS caddybuild
+RUN xcaddy build --with github.com/caddy-dns/ovh
+
+FROM caddy:2-alpine
+LABEL version="0.1.0" description="Joel edge: internal tls, static front, api proxy"
+COPY --from=caddybuild /usr/bin/caddy /usr/bin/caddy
+COPY --from=front /build/dist/frontend/browser /srv/joel
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+USER 1000:1000
+ENV XDG_DATA_HOME=/data XDG_CONFIG_HOME=/config

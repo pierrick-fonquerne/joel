@@ -72,6 +72,11 @@ async fn main() {
         }
     };
 
+    if let Err(error) = sqlx::migrate!("../../migrations").run(&pool).await {
+        tracing::error!(%error, "database migration failed");
+        std::process::exit(1);
+    }
+
     let config = match api::Config::from_env() {
         Ok(config) => config,
         Err(missing) => {

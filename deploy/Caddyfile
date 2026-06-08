@@ -1,0 +1,43 @@
+{
+	email pierrick.fonquerne@nubster.com
+	http_port 8080
+	https_port 8443
+}
+
+*.pierrickfonquerne.com:8443 {
+	tls {
+		dns ovh {
+			endpoint ovh-eu
+			application_key {env.OVH_APPLICATION_KEY}
+			application_secret {env.OVH_APPLICATION_SECRET}
+			consumer_key {env.OVH_CONSUMER_KEY}
+		}
+	}
+
+	@intranet host intranet.pierrickfonquerne.com
+	handle @intranet {
+		header {
+			Strict-Transport-Security "max-age=31536000"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "no-referrer"
+			Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+		}
+		handle /api/* {
+			reverse_proxy api:8080
+		}
+		handle {
+			root * /srv/joel
+			try_files {path} /index.html
+			file_server
+		}
+	}
+
+	@ntfy host ntfy.pierrickfonquerne.com
+	handle @ntfy {
+		reverse_proxy ntfy:80
+	}
+
+	handle {
+		abort
+	}
+}
