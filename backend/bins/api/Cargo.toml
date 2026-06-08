@@ -12,6 +12,7 @@ workspace = true
 domain = { path = "../../crates/domain" }
 persistence = { path = "../../crates/persistence" }
 axum = "0.8"
+utoipa = { version = "5", features = ["axum_extras"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

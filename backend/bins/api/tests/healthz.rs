@@ -42,3 +42,17 @@ async fn healthz_reports_db_up(pool: PgPool) {
     assert_eq!(json["status"], "ok");
     assert_eq!(json["db"], "up");
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn openapi_spec_is_served(pool: PgPool) {
+    let app = api::build_router(pool);
+    let response = app
+        .oneshot(Request::get("/api/openapi.json").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["info"]["title"], "Joel API");
+    assert!(json["paths"]["/api/healthz"].is_object());
+}

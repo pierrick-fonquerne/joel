@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "generate:api": "openapi-ts"
   },
   "private": true,
   "dependencies": {
@@ -27,6 +28,7 @@
     "@angular-devkit/build-angular": "^19.2.27",
     "@angular/cli": "^19.2.27",
     "@angular/compiler-cli": "^19.2.0",
+    "@hey-api/openapi-ts": "^0.98.2",
     "@types/jasmine": "~5.1.0",
     "angular-eslint": "21.0.1",
     "eslint": "^9.39.1",
