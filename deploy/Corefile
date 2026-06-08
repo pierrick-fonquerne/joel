@@ -1,0 +1,13 @@
+pierrickfonquerne.com:53 {
+    hosts {
+        NETBIRD_IP_PLACEHOLDER intranet.pierrickfonquerne.com
+        NETBIRD_IP_PLACEHOLDER ntfy.pierrickfonquerne.com
+        PUBLIC_IP_PLACEHOLDER netbird.pierrickfonquerne.com
+        fallthrough
+    }
+    forward . 1.1.1.1 9.9.9.9
+}
+
+.:53 {
+    forward . 1.1.1.1 9.9.9.9
+}
