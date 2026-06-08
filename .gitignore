@@ -1,0 +1,16 @@
+# Rust
+backend/target/
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Environnements
+.env
+.env.*
+!.env.example
+
+# Outils locaux
+.superpowers/
+.remember/
