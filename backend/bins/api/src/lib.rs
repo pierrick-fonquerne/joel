@@ -2,6 +2,7 @@
 
 pub mod auth_routes;
 pub mod state;
+pub mod webauthn_routes;
 
 pub use state::Config;
 
@@ -44,6 +45,7 @@ pub fn build_router_with(pool: PgPool, config: &Config) -> Result<Router, domain
             get(|| async { Json(ApiDoc::openapi()) }),
         )
         .merge(auth_routes::router())
+        .merge(webauthn_routes::router())
         .with_state(state))
 }
 
