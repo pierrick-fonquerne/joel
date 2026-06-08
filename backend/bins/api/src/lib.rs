@@ -25,7 +25,7 @@ pub struct Health {
 struct ApiDoc;
 
 /// Builds the application router with all HTTP routes.
-#[must_use]
+#[must_use = "the router must be passed to an Axum server"]
 pub fn build_router(pool: PgPool) -> Router {
     Router::new()
         .route("/api/healthz", get(healthz))
@@ -37,7 +37,14 @@ pub fn build_router(pool: PgPool) -> Router {
 }
 
 /// Reports liveness of the api process and its database connection.
-#[utoipa::path(get, path = "/api/healthz", responses((status = 200, body = Health)))]
+#[utoipa::path(
+    get,
+    path = "/api/healthz",
+    responses(
+        (status = 200, body = Health, description = "Service healthy"),
+        (status = 503, body = Health, description = "Service degraded")
+    )
+)]
 async fn healthz(State(pool): State<PgPool>) -> impl IntoResponse {
     let db_up = persistence::ping(&pool).await.is_ok();
     let status_code = if db_up {

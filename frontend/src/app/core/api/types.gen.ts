@@ -29,7 +29,19 @@ export type HealthzData = {
     url: '/api/healthz';
 };
 
+export type HealthzErrors = {
+    /**
+     * Service degraded
+     */
+    503: Health;
+};
+
+export type HealthzError = HealthzErrors[keyof HealthzErrors];
+
 export type HealthzResponses = {
+    /**
+     * Service healthy
+     */
     200: Health;
 };
 
