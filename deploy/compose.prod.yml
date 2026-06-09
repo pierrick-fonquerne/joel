@@ -26,8 +26,8 @@ services:
     environment:
       DATABASE_URL: postgres://joel:${POSTGRES_PASSWORD}@postgres:5432/joel
       MASTER_KEY: ${MASTER_KEY}
-      WEBAUTHN_RP_ID: intranet.pierrickfonquerne.com
-      WEBAUTHN_ORIGIN: https://intranet.pierrickfonquerne.com
+      WEBAUTHN_RP_ID: joel.fonquerne.com
+      WEBAUTHN_ORIGIN: https://joel.fonquerne.com
       SESSION_TTL_DAYS: "30"
       RUST_LOG: info
     networks: [edge, data]

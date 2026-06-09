@@ -1,4 +1,4 @@
-base-url: https://ntfy.pierrickfonquerne.com
+base-url: https://ntfy.fonquerne.com
 upstream-base-url: https://ntfy.sh
 auth-file: /var/lib/ntfy/auth.db
 auth-default-access: deny-all

@@ -4,7 +4,7 @@
 	https_port 8443
 }
 
-*.pierrickfonquerne.com:8443 {
+*.fonquerne.com:8443 {
 	tls {
 		dns ovh {
 			endpoint ovh-eu
@@ -14,8 +14,8 @@
 		}
 	}
 
-	@intranet host intranet.pierrickfonquerne.com
-	handle @intranet {
+	@joel host joel.fonquerne.com
+	handle @joel {
 		header {
 			Strict-Transport-Security "max-age=31536000"
 			X-Content-Type-Options "nosniff"
@@ -32,7 +32,7 @@
 		}
 	}
 
-	@ntfy host ntfy.pierrickfonquerne.com
+	@ntfy host ntfy.fonquerne.com
 	handle @ntfy {
 		reverse_proxy ntfy:80
 	}
