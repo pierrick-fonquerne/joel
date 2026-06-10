@@ -1,0 +1,13 @@
+fonquerne.com:53 {
+    hosts {
+        100.122.144.131 joel.fonquerne.com
+        100.122.144.131 ntfy.fonquerne.com
+        51.77.149.61 vpn.fonquerne.com
+        fallthrough
+    }
+    forward . 1.1.1.1 9.9.9.9
+}
+
+.:53 {
+    forward . 1.1.1.1 9.9.9.9
+}

@@ -1,0 +1,6 @@
+base-url: https://ntfy.fonquerne.com
+upstream-base-url: https://ntfy.sh
+auth-file: /var/lib/ntfy/auth.db
+auth-default-access: deny-all
+behind-proxy: true
+cache-file: /var/cache/ntfy/cache.db

@@ -1,0 +1,103 @@
+services:
+  caddy:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.edge
+    restart: unless-stopped
+    ports:
+      - "${NETBIRD_IP}:443:8443"
+    environment:
+      OVH_APPLICATION_KEY: ${OVH_APPLICATION_KEY}
+      OVH_APPLICATION_SECRET: ${OVH_APPLICATION_SECRET}
+      OVH_CONSUMER_KEY: ${OVH_CONSUMER_KEY}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, internet]
+    depends_on: [api, ntfy]
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+      target: api
+    restart: unless-stopped
+    read_only: true
+    environment:
+      DATABASE_URL: postgres://joel:${POSTGRES_PASSWORD}@postgres:5432/joel
+      MASTER_KEY: ${MASTER_KEY}
+      WEBAUTHN_RP_ID: joel.fonquerne.com
+      WEBAUTHN_ORIGIN: https://joel.fonquerne.com
+      SESSION_TTL_DAYS: "30"
+      RUST_LOG: info
+    networks: [edge, data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  runner:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+      target: runner
+    restart: unless-stopped
+    read_only: true
+    environment:
+      DATABASE_URL: postgres://joel:${POSTGRES_PASSWORD}@postgres:5432/joel
+      RUST_LOG: info
+    networks: [data, internet]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: joel
+      POSTGRES_USER: joel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U joel -d joel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ntfy:
+    image: binwiederhier/ntfy
+    restart: unless-stopped
+    command: serve
+    user: "1000:1000"
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy_cache:/var/cache/ntfy
+      - ntfy_data:/var/lib/ntfy
+    networks: [edge, internet]
+
+  coredns:
+    image: coredns/coredns
+    restart: unless-stopped
+    command: ["-conf", "/etc/coredns/Corefile"]
+    ports:
+      - "${NETBIRD_IP}:53:53/udp"
+      - "${NETBIRD_IP}:53:53/tcp"
+    volumes:
+      - ./Corefile:/etc/coredns/Corefile:ro
+    networks: [internet]
+
+networks:
+  edge:
+    internal: true
+  data:
+    internal: true
+  internet:
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
+  ntfy_cache:
+  ntfy_data:
