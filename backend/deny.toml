@@ -4,6 +4,12 @@ private.ignore = true
 
 [advisories]
 yanked = "deny"
+# Unmaintained (not vulnerable) crates pulled transitively by the candle embedding stack.
+# Consciously accepted: both are widely used, low risk, and only informational advisories.
+ignore = [
+    "RUSTSEC-2024-0436", # paste: no longer maintained (proc-macro helper, via candle)
+    "RUSTSEC-2025-0119", # number_prefix: unmaintained (progress bar, via hf-hub)
+]
 
 [bans]
 multiple-versions = "warn"

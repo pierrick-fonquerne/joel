@@ -2,3 +2,4 @@
 //! This crate has zero infrastructure dependency by design.
 
 pub mod auth;
+pub mod knowledge;
