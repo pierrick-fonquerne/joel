@@ -55,7 +55,13 @@ mod tests {
     async fn const_embedder_satisfies_port() {
         let embedder = ConstEmbedder;
         assert_eq!(embedder.dimension(), 3);
-        assert_eq!(embedder.embed_passage("hello").await.unwrap().len(), 3);
-        assert_eq!(embedder.embed_query("hello").await.unwrap().len(), 3);
+        assert_eq!(
+            embedder.embed_passage("hello").await.unwrap(),
+            vec![1.0, 0.0, 0.0]
+        );
+        assert_eq!(
+            embedder.embed_query("hello").await.unwrap(),
+            vec![0.0, 1.0, 0.0]
+        );
     }
 }
