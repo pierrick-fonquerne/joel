@@ -10,65 +10,15 @@ use tokenizers::Tokenizer;
 
 use crate::text::{E5Prefix, normalize_l2};
 
-/// Embedder backed by `intfloat/multilingual-e5-small` (384 dimensions, XLM-RoBERTa architecture).
-///
-/// Downloads and caches the model weights from the Hugging Face hub on first use.
-pub struct CandleEmbedder {
+/// Inner synchronous model state, held behind an `Arc` so it can be moved into
+/// `tokio::task::spawn_blocking` closures without cloning heavy weights.
+struct CandleModel {
     model: XLMRobertaModel,
     tokenizer: Tokenizer,
     device: Device,
 }
 
-impl CandleEmbedder {
-    /// Downloads and loads `intfloat/multilingual-e5-small` from the Hugging Face hub.
-    ///
-    /// On the first call the model files (~470 MB) are downloaded and cached locally.
-    /// Subsequent calls reuse the local cache.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EmbedError::ModelLoad`] if any model artifact (config, tokenizer,
-    /// weights) cannot be downloaded or parsed.
-    pub fn load() -> Result<Self, EmbedError> {
-        let device = Device::Cpu;
-        let api = Api::new().map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let repo = api.model("intfloat/multilingual-e5-small".to_string());
-
-        let config_path = repo
-            .get("config.json")
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let tokenizer_path = repo
-            .get("tokenizer.json")
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let weights_path = repo
-            .get("model.safetensors")
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-
-        let config_bytes =
-            std::fs::read(&config_path).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let config: Config = serde_json::from_slice(&config_bytes)
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-
-        // Use the buffered (non-mmap) loader to avoid `unsafe` code.
-        // The weights file is ~117 MB for multilingual-e5-small.
-        let weights_bytes =
-            std::fs::read(&weights_path).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let vb = VarBuilder::from_buffered_safetensors(weights_bytes, DType::F32, &device)
-            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-
-        let model =
-            XLMRobertaModel::new(&config, vb).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-
-        Ok(Self {
-            model,
-            tokenizer,
-            device,
-        })
-    }
-
+impl CandleModel {
     /// Runs the full embedding pipeline for `text` with `prefix`.
     ///
     /// Steps: prefix -> tokenize -> forward -> masked mean pool -> L2 normalize.
@@ -112,6 +62,67 @@ impl CandleEmbedder {
     }
 }
 
+/// Embedder backed by `intfloat/multilingual-e5-small` (384 dimensions, XLM-RoBERTa architecture).
+///
+/// Downloads and caches the model weights from the Hugging Face hub on first use.
+/// Inference runs via `tokio::task::spawn_blocking` to avoid blocking the async executor.
+pub struct CandleEmbedder {
+    inner: std::sync::Arc<CandleModel>,
+}
+
+impl CandleEmbedder {
+    /// Downloads and loads `intfloat/multilingual-e5-small` from the Hugging Face hub.
+    ///
+    /// On the first call the model files (~117 MB) are downloaded and cached locally.
+    /// Subsequent calls reuse the local cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EmbedError::ModelLoad`] if any model artifact (config, tokenizer,
+    /// weights) cannot be downloaded or parsed.
+    pub fn load() -> Result<Self, EmbedError> {
+        let device = Device::Cpu;
+        let api = Api::new().map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+        let repo = api.model("intfloat/multilingual-e5-small".to_string());
+
+        let config_path = repo
+            .get("config.json")
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+        let tokenizer_path = repo
+            .get("tokenizer.json")
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+        let weights_path = repo
+            .get("model.safetensors")
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+
+        let config_bytes =
+            std::fs::read(&config_path).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+        let config: Config = serde_json::from_slice(&config_bytes)
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+
+        // Use the buffered (non-mmap) loader to avoid `unsafe` code.
+        // The weights file is ~117 MB for multilingual-e5-small.
+        let weights_bytes =
+            std::fs::read(&weights_path).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+        let vb = VarBuilder::from_buffered_safetensors(weights_bytes, DType::F32, &device)
+            .map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+
+        let model =
+            XLMRobertaModel::new(&config, vb).map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
+
+        Ok(Self {
+            inner: std::sync::Arc::new(CandleModel {
+                model,
+                tokenizer,
+                device,
+            }),
+        })
+    }
+}
+
 /// Computes the attention-masked mean of `hidden_states` over the sequence dimension.
 ///
 /// `hidden_states` has shape `[batch, seq, hidden]`.
@@ -145,11 +156,19 @@ impl Embedder for CandleEmbedder {
     }
 
     async fn embed_passage(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
-        self.embed(E5Prefix::Passage, text)
+        let inner = std::sync::Arc::clone(&self.inner);
+        let text = text.to_owned();
+        tokio::task::spawn_blocking(move || inner.embed(E5Prefix::Passage, &text))
+            .await
+            .map_err(|e| EmbedError::Inference(e.to_string()))?
     }
 
     async fn embed_query(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
-        self.embed(E5Prefix::Query, text)
+        let inner = std::sync::Arc::clone(&self.inner);
+        let text = text.to_owned();
+        tokio::task::spawn_blocking(move || inner.embed(E5Prefix::Query, &text))
+            .await
+            .map_err(|e| EmbedError::Inference(e.to_string()))?
     }
 }
 
@@ -163,7 +182,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "telecharge multilingual-e5-small (~470 Mo) ; lancer manuellement"]
+    #[ignore = "telecharge multilingual-e5-small (~117 MB) ; lancer manuellement"]
     async fn embeds_with_expected_dimension_and_semantics() {
         let embedder = CandleEmbedder::load().unwrap();
         assert_eq!(embedder.dimension(), 384);
