@@ -1,6 +1,6 @@
 //! The logical corpus a memory belongs to.
 
-/// A logical collection of memories backing one `EidosDB` collection.
+/// A logical collection of memories backing one storage-backend collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Corpus {
     /// Press review documents.
@@ -10,7 +10,7 @@ pub enum Corpus {
 }
 
 impl Corpus {
-    /// The `EidosDB` collection name backing this corpus.
+    /// The storage backend collection name backing this corpus.
     #[must_use]
     pub fn collection(self) -> &'static str {
         match self {

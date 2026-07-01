@@ -60,7 +60,7 @@ pub enum KnowledgeError {
 /// Text-in, semantic-recall-out port.
 ///
 /// Implementations are responsible for embedding text and persisting
-/// vectors together with business metadata in an `EidosDB` collection.
+/// vectors together with business metadata in the storage backend.
 #[async_trait]
 pub trait KnowledgeStore: Send + Sync {
     /// Embeds `remembrance.text` and upserts the vector + payload.
@@ -70,6 +70,9 @@ pub trait KnowledgeStore: Send + Sync {
         remembrance: Remembrance,
     ) -> Result<(), KnowledgeError>;
 
+    /// Idempotently stores a batch of memories.
+    async fn remember_batch(&self, corpus: Corpus, items: Vec<Remembrance>) -> Result<(), KnowledgeError>;
+
     /// Embeds `query` and returns the top-`k` nearest memories.
     async fn recall(
         &self,
@@ -78,6 +81,10 @@ pub trait KnowledgeStore: Send + Sync {
         k: usize,
         filter: &RecallFilter,
     ) -> Result<Vec<RecallHit>, KnowledgeError>;
+
+    /// Hybrid (vector + lexical) recall of the top `k` memories.
+    async fn recall_hybrid(&self, corpus: Corpus, query: &str, k: usize, filter: &RecallFilter)
+        -> Result<Vec<RecallHit>, KnowledgeError>;
 
     /// Forgets the memory with id `id`, returning whether it existed.
     async fn forget(&self, corpus: Corpus, id: MemoryId) -> Result<bool, KnowledgeError>;
