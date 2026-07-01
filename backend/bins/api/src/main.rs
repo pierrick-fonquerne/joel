@@ -95,7 +95,7 @@ async fn main() {
         return;
     }
 
-    let app = match api::build_router_with(pool, &config) {
+    let app = match api::build_app(pool, &config).await {
         Ok(router) => router.layer(tower_http::trace::TraceLayer::new_for_http()),
         Err(error) => {
             tracing::error!(%error, "failed to build application router");
