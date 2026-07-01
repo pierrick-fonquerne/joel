@@ -132,16 +132,21 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
  "axum-extra",
  "base64 0.22.1",
  "domain",
+ "eidos-embedded",
+ "eidosdb-client",
  "http-body-util",
+ "knowledge",
  "persistence",
  "rand 0.9.4",
  "serde",
  "serde_json",
  "sqlx",
+ "tempfile",
  "time",
  "tokio",
  "tower",

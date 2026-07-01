@@ -10,6 +10,8 @@ workspace = true
 
 [dependencies]
 domain = { path = "../../crates/domain" }
+knowledge = { path = "../../crates/knowledge" }
+eidosdb-client = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
 persistence = { path = "../../crates/persistence" }
 axum = "0.8"
 axum-extra = { version = "0.10", features = ["cookie"] }
@@ -30,5 +32,8 @@ base64 = "0.22"
 
 [dev-dependencies]
 domain = { path = "../../crates/domain" }
+eidos-embedded = { path = "../../crates/eidos-embedded" }
 http-body-util = "0.1"
 tower = "0.5"
+async-trait = "0.1"
+tempfile = "3"

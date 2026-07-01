@@ -1,10 +1,13 @@
 //! Joel HTTP API: router assembly and HTTP adapters.
 
 pub mod auth_routes;
+pub mod knowledge_routes;
 pub mod state;
 pub mod webauthn_routes;
 
 pub use state::Config;
+
+use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -50,6 +53,39 @@ pub fn build_router_with(
         .merge(auth_routes::router())
         .merge(webauthn_routes::router())
         .with_state(state))
+}
+
+/// Builds the full application router, including the semantic recall route.
+///
+/// Calls [`build_router_with`] for the core routes and, when the environment
+/// variable `JOEL_EIDOS_ENDPOINT` is set, connects to the `EidosDB` gRPC
+/// server, loads the `CandleEmbedder`, and merges the knowledge sub-router.
+///
+/// When `JOEL_EIDOS_ENDPOINT` is absent the recall route is simply not
+/// mounted; the rest of the API works as normal.
+///
+/// # Errors
+///
+/// Propagates [`domain::auth::model::AuthError`] from [`build_router_with`],
+/// and any error produced by the embedder load or the gRPC client connect.
+pub async fn build_app(
+    pool: PgPool,
+    config: &Config,
+) -> Result<Router, Box<dyn std::error::Error + Send + Sync>> {
+    let mut app = build_router_with(pool, config)?;
+
+    if let Ok(endpoint) = std::env::var("JOEL_EIDOS_ENDPOINT") {
+        let embedder = knowledge::CandleEmbedder::load()?;
+        let client = eidosdb_client::EidosClient::connect(endpoint)
+            .await
+            .map_err(|e| format!("{e}"))?;
+        let store = knowledge::EidosKnowledgeStore::new(client, Arc::new(embedder));
+        store.ensure_collections().await?;
+        let store: Arc<dyn domain::knowledge::KnowledgeStore> = Arc::new(store);
+        app = app.merge(knowledge_routes::router(store));
+    }
+
+    Ok(app)
 }
 
 /// Reports liveness of the api process and its database connection.
