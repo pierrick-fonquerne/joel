@@ -155,5 +155,56 @@ async fn recall_respects_the_theme_filter() {
         .recall(Corpus::Press, "a", 10, &filter)
         .await
         .expect("recall");
+    assert_eq!(hits.len(), 1, "exactly one sport memory must be returned");
     assert!(hits.iter().all(|h| h.payload["theme"] == "sport"));
+}
+
+#[tokio::test]
+async fn recall_hybrid_returns_a_hit() {
+    let (store, _dir) = store().await;
+    store
+        .remember(Corpus::Press, item("renewable energy sources", "energy"))
+        .await
+        .expect("remember");
+    let hits = store
+        .recall_hybrid(
+            Corpus::Press,
+            "renewable energy sources",
+            5,
+            &RecallFilter::default(),
+        )
+        .await
+        .expect("recall_hybrid");
+    assert!(!hits.is_empty(), "hybrid search returned no hits");
+    assert_eq!(hits[0].payload["theme"], "energy");
+}
+
+#[tokio::test]
+async fn recall_respects_the_temporal_window() {
+    let (store, _dir) = store().await;
+    let early = Remembrance {
+        id: MemoryId::new(),
+        text: "early event details".into(),
+        payload: serde_json::json!({ "theme": "history", "title": "early" }),
+        occurred_at: OffsetDateTime::from_unix_timestamp(1_000).unwrap(),
+    };
+    let late = Remembrance {
+        id: MemoryId::new(),
+        text: "late event details".into(),
+        payload: serde_json::json!({ "theme": "history", "title": "late" }),
+        occurred_at: OffsetDateTime::from_unix_timestamp(5_000).unwrap(),
+    };
+    let late_id = late.id;
+    store.remember(Corpus::Press, early).await.expect("early");
+    store.remember(Corpus::Press, late).await.expect("late");
+    let filter = RecallFilter {
+        since: Some(OffsetDateTime::from_unix_timestamp(3_000).unwrap()),
+        ..RecallFilter::default()
+    };
+    let hits = store
+        .recall(Corpus::Press, "event details", 10, &filter)
+        .await
+        .expect("recall");
+    assert_eq!(hits.len(), 1, "only the in-window memory should be returned");
+    assert_eq!(hits[0].id, late_id, "the returned hit must be the late event");
 }
