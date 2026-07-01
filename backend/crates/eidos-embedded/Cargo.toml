@@ -1,0 +1,24 @@
+[package]
+name = "eidos-embedded"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+eidosdb-server = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-proto = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+tonic = { version = "0.14", features = ["transport"] }
+tokio = { version = "1", features = ["rt", "net"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+thiserror = "2"
+
+[dev-dependencies]
+eidosdb-client = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-core = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-hnsw = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
