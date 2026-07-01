@@ -8,8 +8,26 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[lib]
+name = "runner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "runner"
+path = "src/main.rs"
+
 [dependencies]
 domain = { path = "../../crates/domain" }
+knowledge = { path = "../../crates/knowledge" }
+eidos-embedded = { path = "../../crates/eidos-embedded" }
+eidosdb-client = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+thiserror = "2"
+serde_json = "1"
+time = { version = "0.3", features = ["serde"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+async-trait = "0.1"
+tempfile = "3"

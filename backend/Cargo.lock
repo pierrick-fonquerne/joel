@@ -3138,7 +3138,15 @@ dependencies = [
 name = "runner"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "domain",
+ "eidos-embedded",
+ "eidosdb-client",
+ "knowledge",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "time",
  "tokio",
  "tracing",
  "tracing-subscriber",
