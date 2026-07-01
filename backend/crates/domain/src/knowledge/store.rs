@@ -71,7 +71,11 @@ pub trait KnowledgeStore: Send + Sync {
     ) -> Result<(), KnowledgeError>;
 
     /// Idempotently stores a batch of memories.
-    async fn remember_batch(&self, corpus: Corpus, items: Vec<Remembrance>) -> Result<(), KnowledgeError>;
+    async fn remember_batch(
+        &self,
+        corpus: Corpus,
+        items: Vec<Remembrance>,
+    ) -> Result<(), KnowledgeError>;
 
     /// Embeds `query` and returns the top-`k` nearest memories.
     async fn recall(
@@ -83,8 +87,13 @@ pub trait KnowledgeStore: Send + Sync {
     ) -> Result<Vec<RecallHit>, KnowledgeError>;
 
     /// Hybrid (vector + lexical) recall of the top `k` memories.
-    async fn recall_hybrid(&self, corpus: Corpus, query: &str, k: usize, filter: &RecallFilter)
-        -> Result<Vec<RecallHit>, KnowledgeError>;
+    async fn recall_hybrid(
+        &self,
+        corpus: Corpus,
+        query: &str,
+        k: usize,
+        filter: &RecallFilter,
+    ) -> Result<Vec<RecallHit>, KnowledgeError>;
 
     /// Forgets the memory with id `id`, returning whether it existed.
     async fn forget(&self, corpus: Corpus, id: MemoryId) -> Result<bool, KnowledgeError>;
