@@ -19,6 +19,12 @@ tokenizers = "0.21"
 hf-hub = "0.4"
 serde_json = "1"
 tokio = { version = "1", features = ["rt"] }
+eidosdb-client = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-core = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-query = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-hnsw = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-lexical = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+time = { version = "0.3", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
