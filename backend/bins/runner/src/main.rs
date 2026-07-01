@@ -18,7 +18,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = std::env::var("JOEL_EIDOS_DATA_DIR").unwrap_or_else(|_| "./data/eidos".into());
     let addr_str = std::env::var("JOEL_EIDOS_ADDR").unwrap_or_else(|_| "127.0.0.1:50100".into());
     let addr: SocketAddr = addr_str.parse()?;
-    let embedder = Arc::new(knowledge::CandleEmbedder::load()?);
+    let embedder = Arc::new(
+        tokio::task::spawn_blocking(knowledge::CandleEmbedder::load)
+            .await
+            .map_err(|error| format!("embedder load task panicked: {error}"))??,
+    );
 
     tracing::info!("bootstrapping EidosDB");
     let (_store, handle) = runner::bootstrap(data_dir.into(), addr, embedder).await?;

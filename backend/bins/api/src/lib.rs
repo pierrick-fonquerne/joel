@@ -75,7 +75,9 @@ pub async fn build_app(
     let mut app = build_router_with(pool, config)?;
 
     if let Ok(endpoint) = std::env::var("JOEL_EIDOS_ENDPOINT") {
-        let embedder = knowledge::CandleEmbedder::load()?;
+        let embedder = tokio::task::spawn_blocking(knowledge::CandleEmbedder::load)
+            .await
+            .map_err(|error| format!("embedder load task panicked: {error}"))??;
         let client = eidosdb_client::EidosClient::connect(endpoint)
             .await
             .map_err(|e| format!("{e}"))?;

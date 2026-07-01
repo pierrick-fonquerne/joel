@@ -92,6 +92,11 @@ async fn recall_returns_seeded_hit() {
         "expected at least one hit, got: {json}"
     );
 
+    let hit = &json[0];
+    assert!(hit["id"].is_string());
+    assert!(hit["score"].is_number());
+    assert_eq!(hit["payload"]["theme"], "test");
+
     drop(store_arc);
     handle.shutdown();
 }
