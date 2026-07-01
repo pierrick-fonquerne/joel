@@ -116,6 +116,7 @@ async fn remember_is_idempotent_on_memory_id() {
         .await
         .expect("recall");
     assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, id, "RecallHit.id must match the original MemoryId");
 }
 
 #[tokio::test]
