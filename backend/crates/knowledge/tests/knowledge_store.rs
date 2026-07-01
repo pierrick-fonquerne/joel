@@ -205,6 +205,13 @@ async fn recall_respects_the_temporal_window() {
         .recall(Corpus::Press, "event details", 10, &filter)
         .await
         .expect("recall");
-    assert_eq!(hits.len(), 1, "only the in-window memory should be returned");
-    assert_eq!(hits[0].id, late_id, "the returned hit must be the late event");
+    assert_eq!(
+        hits.len(),
+        1,
+        "only the in-window memory should be returned"
+    );
+    assert_eq!(
+        hits[0].id, late_id,
+        "the returned hit must be the late event"
+    );
 }
