@@ -1,5 +1,15 @@
 //! Knowledge ports: text embedding contract consumed by the knowledge store.
 
+mod corpus;
+mod memory_id;
+mod score;
+mod store;
+
+pub use corpus::Corpus;
+pub use memory_id::MemoryId;
+pub use score::Score;
+pub use store::{KnowledgeError, KnowledgeStore, RecallFilter, RecallHit, Remembrance};
+
 use async_trait::async_trait;
 
 /// Errors raised while turning text into a vector.
