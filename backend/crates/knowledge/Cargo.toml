@@ -24,7 +24,11 @@ eidosdb-core = { git = "https://github.com/nubster-opensources/eidosdb", rev = "
 eidosdb-query = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
 eidosdb-hnsw = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
 eidosdb-lexical = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+eidosdb-proto = { git = "https://github.com/nubster-opensources/eidosdb", rev = "29d38e81717419602045a6afd89d8c81c5c06a45" }
+uuid = { version = "1" }
 time = { version = "0.3", features = ["serde"] }
 
 [dev-dependencies]
+eidos-embedded = { path = "../eidos-embedded" }
+tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

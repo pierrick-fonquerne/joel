@@ -2038,17 +2038,21 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "domain",
+ "eidos-embedded",
  "eidosdb-client",
  "eidosdb-core",
  "eidosdb-hnsw",
  "eidosdb-lexical",
+ "eidosdb-proto",
  "eidosdb-query",
  "hf-hub",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "time",
  "tokenizers",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
