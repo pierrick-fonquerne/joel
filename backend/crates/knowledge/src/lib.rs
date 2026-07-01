@@ -1,7 +1,7 @@
 //! Knowledge adapters: text embedding backed by candle + multilingual-e5-small.
 
 mod candle_embedder;
-pub mod mapping;
+mod mapping;
 mod text;
 
 pub use candle_embedder::CandleEmbedder;

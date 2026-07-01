@@ -133,4 +133,20 @@ mod tests {
         .expect("payload");
         assert_eq!(payload_to_json(&payload), business);
     }
+
+    #[test]
+    fn single_theme_maps_to_eq_directly() {
+        let filter = RecallFilter {
+            theme: Some("press".into()),
+            since: None,
+            until: None,
+        };
+        match recall_filter_to_filter(&filter) {
+            Some(Filter::Eq(key, Value::Text(v))) => {
+                assert_eq!(key, KEY_THEME);
+                assert_eq!(v, "press");
+            }
+            other => panic!("expected bare Eq, got {other:?}"),
+        }
+    }
 }
