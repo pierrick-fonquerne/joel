@@ -3,6 +3,7 @@
 pub mod auth_routes;
 pub mod knowledge_routes;
 pub mod state;
+pub mod wealth_vault;
 pub mod webauthn_routes;
 
 pub use state::Config;
@@ -44,7 +45,24 @@ pub fn build_router_with(
     config: &Config,
 ) -> Result<Router, domain::auth::model::AuthError> {
     let state = AppState::build(pool, config)?;
-    Ok(Router::new()
+    Ok(core_router(state))
+}
+
+/// Builds the core router with an explicit wealth gate (tests).
+///
+/// # Errors
+/// Propagates [`domain::auth::model::AuthError`] when crypto material is invalid.
+pub fn build_router_with_gate(
+    pool: PgPool,
+    config: &Config,
+    gate: Arc<wealth_vault::WealthGate>,
+) -> Result<Router, domain::auth::model::AuthError> {
+    let state = AppState::build_with_gate(pool, config, gate)?;
+    Ok(core_router(state))
+}
+
+fn core_router(state: AppState) -> Router {
+    Router::new()
         .route("/api/healthz", get(healthz))
         .route(
             "/api/openapi.json",
@@ -52,7 +70,7 @@ pub fn build_router_with(
         )
         .merge(auth_routes::router())
         .merge(webauthn_routes::router())
-        .with_state(state))
+        .with_state(state)
 }
 
 /// Builds the full application router, including the semantic recall route.
@@ -72,7 +90,11 @@ pub async fn build_app(
     pool: PgPool,
     config: &Config,
 ) -> Result<Router, Box<dyn std::error::Error + Send + Sync>> {
-    let mut app = build_router_with(pool, config)?;
+    let state = AppState::build(pool.clone(), config)?;
+    if state.wealth.wealth().await.is_err() {
+        tracing::warn!("wealth vault sealed at startup, wealth routes answer 503 until unsealed");
+    }
+    let mut app = core_router(state);
 
     if let Ok(endpoint) = std::env::var("JOEL_EIDOS_ENDPOINT") {
         let embedder = tokio::task::spawn_blocking(knowledge::CandleEmbedder::load)

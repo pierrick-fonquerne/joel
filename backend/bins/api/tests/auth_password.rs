@@ -45,6 +45,8 @@ pub fn test_config() -> api::Config {
         webauthn_rp_id: "localhost".to_owned(),
         webauthn_origin: "http://localhost:4200".to_owned(),
         session_ttl_days: 30,
+        egide_url: None,
+        egide_token: None,
     }
 }
 
