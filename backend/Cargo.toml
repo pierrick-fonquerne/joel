@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/domain", "crates/persistence", "crates/knowledge", "crates/eidos-embedded", "bins/api", "bins/runner"]
+members = ["crates/domain", "crates/cipher-egide", "crates/persistence", "crates/knowledge", "crates/eidos-embedded", "bins/api", "bins/runner"]
 
 [workspace.package]
 version = "0.1.0"
