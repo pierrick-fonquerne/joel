@@ -86,7 +86,7 @@ impl ValuationRepository for PgValuations {
 
     async fn latest_per_account(&self, at: Date) -> Result<Vec<Valuation>, WealthError> {
         sqlx::query_as::<_, ValuationRow>(&format!(
-            "SELECT DISTINCT ON (account_id) {COLUMNS} FROM wealth_valuations WHERE as_of <= $1 ORDER BY account_id, as_of DESC, recorded_at DESC"
+            "SELECT DISTINCT ON (account_id) {COLUMNS} FROM wealth_valuations WHERE as_of <= $1 ORDER BY account_id, as_of DESC, recorded_at DESC, id DESC"
         ))
         .bind(at)
         .fetch_all(&self.pool)
@@ -220,6 +220,7 @@ mod tests {
         );
         repository.insert(&later).await.unwrap();
         repository.insert(&earlier).await.unwrap();
+        let later_id = later.id.0;
 
         assert_eq!(
             repository.for_account(account.id).await.unwrap(),
@@ -234,10 +235,21 @@ mod tests {
                 .iter()
                 .all(|bytes| !bytes.windows(6).any(|w| w == b"123456"))
         );
+        let raw: Vec<u8> = sqlx::query_scalar("SELECT amount FROM wealth_valuations WHERE id = $1")
+            .bind(later_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let context = CipherContext {
+            table: "wealth_valuations",
+            column: "amount",
+            row_id: later_id,
+        };
+        assert_eq!(FakeCipher.decrypt(&raw, &context).unwrap(), b"123456.78");
     }
 
     #[sqlx::test(migrations = "../../migrations")]
-    async fn valuations_cannot_be_updated_or_deleted(pool: PgPool) {
+    async fn valuations_cannot_be_updated_deleted_or_truncated(pool: PgPool) {
         let account = seeded_account(&pool).await;
         PgValuations::new(pool.clone(), Arc::new(FakeCipher))
             .insert(&valuation(
@@ -248,17 +260,16 @@ mod tests {
             ))
             .await
             .unwrap();
-        assert!(
-            sqlx::query("UPDATE wealth_valuations SET as_of = as_of")
-                .execute(&pool)
-                .await
-                .is_err()
-        );
-        assert!(
-            sqlx::query("DELETE FROM wealth_valuations")
-                .execute(&pool)
-                .await
-                .is_err()
-        );
+        for statement in [
+            "UPDATE wealth_valuations SET as_of = as_of",
+            "DELETE FROM wealth_valuations",
+            "TRUNCATE wealth_valuations",
+        ] {
+            let error = sqlx::query(statement).execute(&pool).await.unwrap_err();
+            assert!(
+                error.to_string().contains("append-only"),
+                "{statement}: {error}"
+            );
+        }
     }
 }

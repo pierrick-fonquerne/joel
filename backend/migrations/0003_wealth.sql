@@ -32,6 +32,9 @@ $$;
 CREATE TRIGGER wealth_valuations_append_only
     BEFORE UPDATE OR DELETE ON wealth_valuations
     FOR EACH ROW EXECUTE FUNCTION wealth_valuations_reject_change();
+CREATE TRIGGER wealth_valuations_no_truncate
+    BEFORE TRUNCATE ON wealth_valuations
+    FOR EACH STATEMENT EXECUTE FUNCTION wealth_valuations_reject_change();
 
 CREATE TABLE wealth_exchange_rates (
     currency TEXT NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),

@@ -207,13 +207,31 @@ mod tests {
     #[sqlx::test(migrations = "../../migrations")]
     async fn name_and_notes_are_never_stored_in_clear(pool: PgPool) {
         let repository = repository(pool.clone());
-        repository.insert(&pea()).await.unwrap();
+        let account = pea();
+        repository.insert(&account).await.unwrap();
         let (name, notes): (Vec<u8>, Option<Vec<u8>>) =
             sqlx::query_as("SELECT name, notes FROM wealth_accounts")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
         assert!(!name.windows(4).any(|w| w == b"PEA "));
-        assert!(!notes.unwrap().windows(6).any(|w| w == b"ouvert"));
+        let notes = notes.unwrap();
+        assert!(!notes.windows(6).any(|w| w == b"ouvert"));
+
+        let id = account.id.0;
+        let context = |column| CipherContext {
+            table: "wealth_accounts",
+            column,
+            row_id: id,
+        };
+        assert_eq!(
+            FakeCipher.decrypt(&name, &context("name")).unwrap(),
+            b"PEA Bourso"
+        );
+        assert_eq!(
+            FakeCipher.decrypt(&notes, &context("notes")).unwrap(),
+            b"ouvert en 2019"
+        );
+        assert!(FakeCipher.decrypt(&name, &context("notes")).is_err());
     }
 }
