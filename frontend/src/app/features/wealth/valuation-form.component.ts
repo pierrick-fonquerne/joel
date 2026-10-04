@@ -8,7 +8,7 @@ import { VaultSealedComponent } from './vault-sealed.component';
 import { WealthAmountPipe } from './wealth-amount.pipe';
 import { errorCodeOf, wealthErrorMessage } from './wealth-error-messages';
 import { WealthService } from './wealth.service';
-import { Valuation } from './wealth.models';
+import { Account, Valuation } from './wealth.models';
 
 function localToday(): string {
   const now = new Date();
@@ -24,6 +24,9 @@ function localToday(): string {
       <app-vault-sealed />
     } @else {
       <form (ngSubmit)="submit()" class="form">
+        @if (account(); as current) {
+          <p class="form__account">{{ current.name }} ({{ current.currency }})</p>
+        }
         <label>
           Montant
           <span class="form__amount">
@@ -56,6 +59,7 @@ function localToday(): string {
     .form { display: flex; flex-direction: column; gap: 0.9rem; max-width: 24rem; }
     .form input { font-size: 1.3rem; min-height: 2.9rem; width: 100%; }
     .form button { min-height: 3rem; font-size: 1.1rem; }
+    .form__account { margin: 0; font-weight: 600; }
     .form__amount { display: flex; gap: 0.5rem; }
     .form__sign { min-width: 3rem; min-height: 2.9rem; font-size: 1.3rem; }
     .form__error { color: #f08a7e; }
@@ -75,8 +79,13 @@ export class ValuationFormComponent {
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly isSaving = signal(false);
   protected readonly history = signal<Valuation[]>([]);
+  protected readonly account = signal<Account | null>(null);
 
   constructor() {
+    this.wealth
+      .listAccounts()
+      .then((accounts) => this.account.set(accounts.find((candidate) => candidate.id === this.accountId) ?? null))
+      .catch(() => this.logger.error('wealth.valuation.account_failed', {}));
     this.wealth
       .accountHistory(this.accountId)
       .then((valuations) => this.history.set(valuations.slice(-5).reverse()))

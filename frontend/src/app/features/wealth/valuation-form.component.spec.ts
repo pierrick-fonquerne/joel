@@ -4,16 +4,30 @@ import { signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ValuationFormComponent } from './valuation-form.component';
 import { WealthService } from './wealth.service';
+import { Account } from './wealth.models';
+
+const USD_ACCOUNT: Account = {
+  id: 'a1',
+  name: 'Compte Wise',
+  kind: 'bank_account',
+  owner: 'personal',
+  currency: 'USD',
+  is_archived: false,
+  notes: null,
+  latest_valuation: null,
+  is_stale: false,
+};
 
 describe('ValuationFormComponent', () => {
   let wealth: jasmine.SpyObj<WealthService>;
 
   beforeEach(() => {
     localStorage.removeItem('joel.wealth.discreet');
-    wealth = Object.assign(jasmine.createSpyObj<WealthService>('WealthService', ['recordValuation', 'accountHistory']), {
+    wealth = Object.assign(jasmine.createSpyObj<WealthService>('WealthService', ['recordValuation', 'accountHistory', 'listAccounts']), {
       vaultSealed: signal(false),
     });
     wealth.accountHistory.and.resolveTo([]);
+    wealth.listAccounts.and.resolveTo([USD_ACCOUNT]);
     wealth.recordValuation.and.resolveTo({ id: 'v1', as_of: '2026-10-04', amount: '1234.56', currency: 'EUR', source: 'manual', recorded_at: '' });
     TestBed.configureTestingModule({
       providers: [
@@ -50,6 +64,27 @@ describe('ValuationFormComponent', () => {
     fixture.detectChanges();
     expect(wealth.recordValuation).not.toHaveBeenCalled();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Montant invalide');
+  }));
+
+  it('shows the account name and currency above the amount field', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ValuationFormComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector('.form__account')!.textContent!;
+    expect(text).toContain('Compte Wise');
+    expect(text).toContain('USD');
+  }));
+
+  it('stays usable when the account cannot be loaded', fakeAsync(() => {
+    wealth.listAccounts.and.rejectWith(new Error('offline'));
+    const fixture = TestBed.createComponent(ValuationFormComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.form__account')).toBeNull();
+    expect(element.querySelector('input[name="amount"]')).not.toBeNull();
   }));
 
   it('prefills the date with today', () => {
