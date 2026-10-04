@@ -57,6 +57,19 @@ Egide redémarre scellé. Lancer l'étape 3. Les routes patrimoine reviennent se
    éphémère qui ré-enveloppe seulement la clé stockée puis s'arrête : il ne sert aucun
    trafic, la contrainte d'instance unique reste respectée.
 
+## Sauvegarde
+
+Les données patrimoine ne se récupèrent qu'avec les deux morceaux ensemble : le dump
+Postgres (il doit inclure la table `wealth_keys`, donc un dump complet de la base) et le
+volume Docker `egide_data`. Sans l'un des deux, tout le patrimoine chiffré est perdu.
+
+- Sauvegarder `egide_data` en même temps que le dump, au même rythme.
+- Egide chiffre ses données au repos avec le scellé : le volume peut être rangé à côté du
+  dump.
+- Les parts Shamir et le token root restent hors du VPS, jamais dans la sauvegarde.
+- Faire un test de restauration une fois (base et volume sur une machine vide, desceller,
+  vérifier que `/api/wealth/*` répond), avant de compter sur la sauvegarde.
+
 ## Limites connues (Egide 0.1.0)
 
 - Pas de moteur de politiques : le token `joel-api` peut utiliser toutes les clés Transit et
