@@ -11,18 +11,29 @@ scellé, Joel fonctionne mais les routes `/api/wealth/*` répondent `503 wealth_
 
 ## Mise en place (une seule fois)
 
-1. Démarrer Egide : `docker compose -f deploy/compose.prod.yml up -d egide`
+Compose refuse de démarrer la pile entière tant que `deploy/secrets/egide_token` n'existe pas.
+Avant l'étape 6, ne démarrer que `egide` et `postgres`, jamais un `up -d` global.
+
+1. Démarrer Egide : `docker compose -f deploy/compose.prod.yml up -d egide postgres`
 2. Initialiser : `docker compose -f deploy/compose.prod.yml exec egide egide operator init`.
    Ranger les parts Shamir et le token root hors du VPS (gestionnaire de mots de passe, une
    part par emplacement). Le token root n'est affiché qu'une fois.
 3. Desceller : `docker compose -f deploy/compose.prod.yml exec egide egide operator unseal`,
    autant de fois que le seuil de parts l'exige.
-4. Créer la clé Transit, avec le token root :
-   `docker compose -f deploy/compose.prod.yml exec -e EGIDE_TOKEN=<root> egide sh -c 'curl -s -X POST http://localhost:8200/v1/transit/keys -H "Authorization: Bearer $EGIDE_TOKEN" -H "Content-Type: application/json" -d "{\"name\":\"joel-wealth\"}"'`
-5. Créer le token de service de Joel, avec le token root :
-   `... -d '{"service_name": "joel-api"}'` sur `POST /v1/auth/service-tokens`.
-6. Écrire le token `egst_...` dans `deploy/secrets/egide_token` (droits `600`, jamais commité).
-7. Redémarrer l'api : `docker compose -f deploy/compose.prod.yml up -d api`. Au premier
+4. Lire le token root sans le laisser dans l'historique du shell : `read -rs EGIDE_ROOT_TOKEN`
+   (coller le token, Entrée). Puis créer la clé Transit :
+   `docker compose -f deploy/compose.prod.yml exec -e EGIDE_TOKEN="$EGIDE_ROOT_TOKEN" egide sh -c 'curl -s -X POST http://localhost:8200/v1/transit/keys -H "Authorization: Bearer $EGIDE_TOKEN" -H "Content-Type: application/json" -d "{\"name\":\"joel-wealth\"}"'`
+5. Créer le token de service de Joel, avec le même token root :
+   `docker compose -f deploy/compose.prod.yml exec -e EGIDE_TOKEN="$EGIDE_ROOT_TOKEN" egide sh -c 'curl -s -X POST http://localhost:8200/v1/auth/service-tokens -H "Authorization: Bearer $EGIDE_TOKEN" -H "Content-Type: application/json" -d "{\"service_name\":\"joel-api\"}"'`
+   Le token `egst_...` n'est affiché qu'une fois : le copier tout de suite. Ensuite, effacer
+   le token root de l'environnement : `unset EGIDE_ROOT_TOKEN`.
+6. Écrire le token dans `deploy/secrets/egide_token`, puis régler les droits :
+   `mkdir -p deploy/secrets`, écrire le fichier, puis
+   `sudo chown 65532:65532 deploy/secrets/egide_token && chmod 400 deploy/secrets/egide_token`.
+   Pourquoi : l'api tourne en `USER nonroot` (uid 65532). Un fichier en `600` appartenant à
+   l'utilisateur de déploiement serait illisible dans le conteneur. Le fichier ne doit jamais
+   être commité.
+7. Démarrer toute la pile : `docker compose -f deploy/compose.prod.yml up -d`. Au premier
    démarrage, Joel génère la clé de données et enregistre sa version enveloppée.
 
 ## Après chaque redémarrage du VPS
@@ -36,7 +47,9 @@ Egide redémarre scellé. Lancer l'étape 3. Les routes patrimoine reviennent se
    `POST /v1/transit/keys/joel-wealth/rotate`.
 2. Ré-envelopper la clé de données :
    `docker compose -f deploy/compose.prod.yml run --rm api rewrap-wealth-key`.
-   Les données chiffrées ne bougent pas.
+   Les données chiffrées ne bougent pas. `run --rm api rewrap-wealth-key` lance un conteneur
+   éphémère qui ré-enveloppe seulement la clé stockée puis s'arrête : il ne sert aucun
+   trafic, la contrainte d'instance unique reste respectée.
 
 ## Limites connues (Egide 0.1.0)
 
