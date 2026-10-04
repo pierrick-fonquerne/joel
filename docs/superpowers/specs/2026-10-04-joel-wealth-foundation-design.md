@@ -3,7 +3,7 @@
 - Date : 2026-10-04
 - Slug : joel-wealth-foundation
 - Statut : validé en brainstorming, en attente de revue de la spec écrite
-- Dépôts touchés : `Perso/joel` (nouveau module `domain/wealth`, nouveau crate `cipher-egide`, `persistence`, `bins/api`, `frontend/features/wealth`, `deploy`)
+- Dépôts touchés : `Perso/joel` (nouveau module `domain/wealth`, nouveaux crates `cipher-egide` et `exchange-rates-ecb`, `persistence`, `bins/api`, `bins/runner`, `frontend/features/wealth`, `deploy`)
 - Dépendance externe : Egide (`nubster-opensources/egide`, moteur Transit), déployé à côté de Joel
 - Successeurs prévus (hors périmètre) : W1 Tools agent, W2 Imports, W3 Routines, W4 Lignes et performance, W5 Pilotage SASU
 
@@ -51,7 +51,7 @@ Un concept, un nom, partout (code, tests, documentation, commits).
 | `ValuationSource` | `Manual`, `CsvImport`, `BankAggregation`, `PriceFeed`. Seul `Manual` est produit en W0 |
 | `Money` | Montant décimal exact (`rust_decimal::Decimal`) et devise ISO 4217. Jamais de flottant |
 | `NetWorth` | À une date : somme, convertie en EUR, du dernier relevé de chaque compte non archivé, avec ventilation par `Owner` et par `AccountKind` |
-| `ExchangeRate` | Taux de change BCE d'une devise vers l'EUR à une date |
+| `ExchangeRate` | Taux BCE à une date : nombre d'unités de la devise pour 1 EUR (`units_per_eur`). Montant en EUR = montant / `units_per_eur` |
 | `FieldCipher` | Port de chiffrement d'un champ, avec contexte lié (AAD) |
 | `StaleAccount` | Compte dont le dernier relevé a plus de 45 jours |
 
@@ -77,11 +77,14 @@ backend/
 │  │       ├─ egide_client.rs     client HTTP Transit (datakey, decrypt, rewrap)
 │  │       └─ envelope_cipher.rs  EgideEnvelopeCipher : AES-256-GCM local avec la datakey
 │  │
-│  └─ persistence/
-│     └─ src/wealth.rs            NOUVEAU : dépôts Postgres + cache des taux BCE
+│  ├─ persistence/
+│  │  └─ src/wealth.rs            NOUVEAU : dépôts Postgres + lecture et écriture des taux BCE en cache
+│  │
+│  └─ exchange-rates-ecb/         NOUVEAU crate : client du flux quotidien BCE (parse XML)
 │
 ├─ migrations/0003_wealth.sql     NOUVEAU
-└─ bins/api/                      câblage, routes /api/wealth/*, état « coffre scellé »
+├─ bins/api/                      câblage, routes /api/wealth/*, état « coffre scellé »
+└─ bins/runner/                   tâche quotidienne : flux BCE -> table des taux
 
 frontend/src/app/features/wealth/ NOUVEAU : tableau de bord, comptes, saisie d'un relevé
 deploy/                           service Egide sur le réseau interne, secret du token
@@ -90,6 +93,11 @@ deploy/                           service Egide sur le réseau interne, secret d
 Règle de dépendance : `domain/wealth` ne connaît ni Postgres, ni HTTP, ni Egide. Le chiffrement
 passe par le port `FieldCipher`. Les dépôts reçoivent des valeurs déjà chiffrées ou les
 déchiffrent via ce port, jamais en appelant Egide directement.
+
+Le conteneur `api` vit sur des réseaux Docker internes, sans accès à Internet. Il ne lit donc
+les taux que depuis la table `wealth_exchange_rates`. C'est le `runner`, seul à avoir une
+sortie Internet, qui récupère chaque jour le flux BCE et alimente cette table. Côté `api`,
+l'implémentation de `ExchangeRateSource` est donc la lecture Postgres.
 
 Le crate `capability-wealth` (Tools pour l'agent) n'est pas créé en W0 : il appartient à W1 et
 dépend du substrat de capacités, pas encore intégré sur `main`.
@@ -122,7 +130,7 @@ pub struct Valuation {
 pub struct NetWorth {
     as_of: Date, total: Money,
     by_owner: BTreeMap<Owner, Money>,
-    by_kind: BTreeMap<AccountKindLabel, Money>,
+    by_kind: BTreeMap<AccountKind, Money>,
     stale_accounts: Vec<AccountId>,
 }
 
@@ -134,7 +142,15 @@ pub trait FieldCipher: Send + Sync {
 }
 
 pub trait ExchangeRateSource: Send + Sync {
-    async fn rate_to_eur(&self, currency: Currency, on: Date) -> Result<Decimal, ExchangeRateError>;
+    /// Units of `currency` for one euro, on `on` or the closest earlier day (7 days max).
+    async fn units_per_eur(&self, currency: Currency, on: Date) -> Result<Option<Decimal>, WealthError>;
+    /// True when at least one rate is known for `currency` (EUR is always known).
+    async fn is_supported(&self, currency: Currency) -> Result<bool, WealthError>;
+}
+
+pub trait WrappedKeyStore: Send + Sync {
+    async fn current(&self) -> Result<Option<String>, WealthError>;
+    async fn insert(&self, wrapped_key: &str, egide_key_name: &str) -> Result<(), WealthError>;
 }
 ```
 
@@ -142,6 +158,7 @@ Invariants vérifiés par le domaine :
 
 - Un relevé d'un compte `Loan` est négatif ou nul. Un relevé d'un autre type est positif ou nul.
 - La devise d'un relevé est celle de son compte.
+- La devise d'un compte est l'EUR ou une devise publiée par la BCE. Une crypto se suit dans un compte en EUR, valorisé à la main.
 - `as_of` n'est pas dans le futur.
 - On ne saisit pas de relevé sur un compte archivé.
 - `ComputeNetWorth(at)` retient, pour chaque compte, le relevé de plus grand `as_of` inférieur
@@ -160,7 +177,7 @@ Invariants vérifiés par le domaine :
 |---|---|---|
 | `wealth_accounts` | `id`, `kind`, `brokerage_envelope`, `owner`, `currency`, `is_archived`, `created_at` | `name`, `notes` |
 | `wealth_valuations` | `id`, `account_id`, `as_of`, `currency`, `source`, `recorded_at` | `amount` (décimal sérialisé en texte avant chiffrement) |
-| `wealth_exchange_rates` | `currency`, `on_date`, `rate_to_eur` | aucune (donnée publique) |
+| `wealth_exchange_rates` | `currency`, `on_date`, `units_per_eur` (unités de devise pour 1 EUR, convention BCE) | aucune (donnée publique) |
 | `wealth_keys` | `version`, `egide_key_name`, `created_at` | `wrapped_key` (déjà chiffrée par Egide) |
 
 Pas de `UPDATE` ni de `DELETE` sur `wealth_valuations` côté application.
@@ -225,11 +242,16 @@ flottant. Erreurs : `400` invariant violé (code métier explicite), `404` compt
 
 ## 9. Déploiement
 
-- Service `egide` dans la composition Docker de Joel, sur le réseau interne uniquement, sans
-  port publié, volume de données persistant.
-- Clé Transit `joel-wealth` créée une fois par l'opérateur (Pierrick, CLI Egide).
-- Token de service Egide limité à cette clé, transmis à Joel en secret Docker (variable
-  `EGIDE_TOKEN_FILE`), jamais en clair dans la composition. URL en `EGIDE_URL`.
+- Service `egide` (image `nubster/egide`, version épinglée) dans la composition Docker de
+  Joel, sur le réseau interne `data` uniquement, sans port publié, volume de données
+  persistant, `EGIDE_ENV=production`. Egide parle HTTP en clair : c'est acceptable parce que
+  le réseau `data` est interne et non routé, et que seuls `api`, `runner` et `postgres` y sont.
+- Clé Transit `joel-wealth` créée une fois par l'opérateur (Pierrick, token root, CLI Egide).
+- Token de service Egide dédié à Joel (`service_name: joel-api`), transmis en secret Docker
+  (variable `EGIDE_TOKEN_FILE`), jamais en clair dans la composition. URL en `EGIDE_URL`.
+- Limite d'Egide 0.1.0 : il n'y a pas encore de moteur de politiques. Un token de service peut
+  utiliser toutes les clés Transit et tous les secrets. On l'accepte parce que cette instance
+  Egide ne sert que Joel. À restreindre dès que les politiques existeront.
 - Après chaque redémarrage du VPS, Pierrick descelle Egide avec ses parts Shamir. Une
   procédure courte est ajoutée au runbook de `deploy/`.
 
@@ -239,7 +261,7 @@ flottant. Erreurs : `400` invariant violé (code métier explicite), `404` compt
 |---|---|
 | W0.1 | Domaine `wealth` : `Money`, `Account`, `Valuation`, invariants, calcul `NetWorth`, use cases, faux |
 | W0.2 | Crate `cipher-egide` : client Transit, `EgideEnvelopeCipher`, tests `wiremock` |
-| W0.3 | Persistance : migration `0003`, dépôts chiffrés, cache des taux, source BCE |
+| W0.3 | Persistance : migration `0003`, dépôts chiffrés, cache des taux ; crate `exchange-rates-ecb` et tâche quotidienne du `runner` |
 | W0.4 | API : routes, état « coffre scellé », tests de routes |
 | W0.5 | PWA : tableau de bord, comptes, saisie, tuile cockpit, mode discret |
 | W0.6 | Déploiement : service Egide, secret, runbook de descellement, vérification sur iPhone en 4G |
