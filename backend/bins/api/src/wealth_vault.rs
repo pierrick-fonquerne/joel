@@ -5,8 +5,11 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use cipher_egide::{EgideClient, EgideEnvelopeCipher};
+use domain::wealth::WrappedKeyStore;
 use domain::wealth::{FieldCipher, Wealth, WealthError};
-use persistence::wealth::{PgAccounts, PgExchangeRates, PgValuations, PgWrappedKeys};
+use persistence::wealth::{
+    PgAccounts, PgExchangeRates, PgValuations, PgWrappedKeys, has_wealth_data,
+};
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 
@@ -27,19 +30,35 @@ pub trait VaultUnlocker: Send + Sync {
 pub struct EgideUnlocker {
     client: EgideClient,
     keys: PgWrappedKeys,
+    pool: PgPool,
 }
 
 impl EgideUnlocker {
     /// Builds the unlocker.
     #[must_use]
-    pub const fn new(client: EgideClient, keys: PgWrappedKeys) -> Self {
-        Self { client, keys }
+    pub const fn new(client: EgideClient, keys: PgWrappedKeys, pool: PgPool) -> Self {
+        Self { client, keys, pool }
     }
 }
 
 #[async_trait]
 impl VaultUnlocker for EgideUnlocker {
     async fn unlock(&self) -> Result<Arc<dyn FieldCipher>, String> {
+        let has_key = self
+            .keys
+            .current()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_some();
+        if !has_key
+            && has_wealth_data(&self.pool)
+                .await
+                .map_err(|error| error.to_string())?
+        {
+            return Err(
+                "wealth data exists but no wrapped key is stored; restore wealth_keys".to_owned(),
+            );
+        }
         EgideEnvelopeCipher::unlock(&self.client, &self.keys)
             .await
             .map(|cipher| Arc::new(cipher) as Arc<dyn FieldCipher>)

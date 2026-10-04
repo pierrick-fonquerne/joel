@@ -2,12 +2,14 @@
 //! through [`domain::wealth::FieldCipher`] before reaching the database.
 
 pub mod accounts;
+pub mod data_presence;
 pub mod exchange_rates;
 mod padding;
 pub mod valuations;
 pub mod wrapped_keys;
 
 pub use accounts::PgAccounts;
+pub use data_presence::has_wealth_data;
 pub use exchange_rates::PgExchangeRates;
 pub use valuations::PgValuations;
 pub use wrapped_keys::PgWrappedKeys;

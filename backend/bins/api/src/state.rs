@@ -149,6 +149,7 @@ fn unlocker_from(pool: &PgPool, config: &Config) -> Arc<dyn VaultUnlocker> {
         (Some(url), Some(token)) => Arc::new(EgideUnlocker::new(
             EgideClient::new(url.clone(), token.clone()),
             PgWrappedKeys::new(pool.clone()),
+            pool.clone(),
         )),
         (url, token) => {
             if url.is_some() || token.is_some() {
