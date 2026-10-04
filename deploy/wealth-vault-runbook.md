@@ -21,10 +21,14 @@ Avant l'étape 6, ne démarrer que `egide` et `postgres`, jamais un `up -d` glob
 3. Desceller : `docker compose -f deploy/compose.prod.yml exec egide egide operator unseal`,
    autant de fois que le seuil de parts l'exige.
 4. Lire le token root sans le laisser dans l'historique du shell : `read -rs EGIDE_ROOT_TOKEN`
-   (coller le token, Entrée). Puis créer la clé Transit :
-   `docker compose -f deploy/compose.prod.yml exec -e EGIDE_TOKEN="$EGIDE_ROOT_TOKEN" egide sh -c 'curl -s -X POST http://localhost:8200/v1/transit/keys -H "Authorization: Bearer $EGIDE_TOKEN" -H "Content-Type: application/json" -d "{\"name\":\"joel-wealth\"}"'`
+   (coller le token, Entrée). L'image Egide n'a pas curl : les appels HTTP passent par un
+   conteneur curl jetable sur le réseau interne `data`. Trouver le vrai nom du réseau (le
+   préfixe est le nom du projet compose) : `docker network ls | grep data`, puis le mettre
+   dans `DATA_NETWORK` (par exemple `export DATA_NETWORK=joel_data`). Créer la clé Transit :
+   `docker run --rm --network "$DATA_NETWORK" curlimages/curl:8.10.1 -s -X POST http://egide:8200/v1/transit/keys -H "Authorization: Bearer $EGIDE_ROOT_TOKEN" -H "Content-Type: application/json" -d '{"name":"joel-wealth"}'`
+   Le shell de l'hôte développe `$EGIDE_ROOT_TOKEN` avant de lancer le conteneur.
 5. Créer le token de service de Joel, avec le même token root :
-   `docker compose -f deploy/compose.prod.yml exec -e EGIDE_TOKEN="$EGIDE_ROOT_TOKEN" egide sh -c 'curl -s -X POST http://localhost:8200/v1/auth/service-tokens -H "Authorization: Bearer $EGIDE_TOKEN" -H "Content-Type: application/json" -d "{\"service_name\":\"joel-api\"}"'`
+   `docker run --rm --network "$DATA_NETWORK" curlimages/curl:8.10.1 -s -X POST http://egide:8200/v1/auth/service-tokens -H "Authorization: Bearer $EGIDE_ROOT_TOKEN" -H "Content-Type: application/json" -d '{"service_name":"joel-api"}'`
    Le token `egst_...` n'est affiché qu'une fois : le copier tout de suite. Ensuite, effacer
    le token root de l'environnement : `unset EGIDE_ROOT_TOKEN`.
 6. Écrire le token dans `deploy/secrets/egide_token`, puis régler les droits :
@@ -43,8 +47,10 @@ Egide redémarre scellé. Lancer l'étape 3. Les routes patrimoine reviennent se
 
 ## Rotation de la clé
 
-1. Faire tourner la clé maîtresse avec le token root :
-   `POST /v1/transit/keys/joel-wealth/rotate`.
+1. Faire tourner la clé maîtresse avec le token root (relu avec `read -rs EGIDE_ROOT_TOKEN`,
+   `DATA_NETWORK` comme à l'étape 4) :
+   `docker run --rm --network "$DATA_NETWORK" curlimages/curl:8.10.1 -s -X POST http://egide:8200/v1/transit/keys/joel-wealth/rotate -H "Authorization: Bearer $EGIDE_ROOT_TOKEN"`,
+   puis `unset EGIDE_ROOT_TOKEN`.
 2. Ré-envelopper la clé de données :
    `docker compose -f deploy/compose.prod.yml run --rm api rewrap-wealth-key`.
    Les données chiffrées ne bougent pas. `run --rm api rewrap-wealth-key` lance un conteneur
