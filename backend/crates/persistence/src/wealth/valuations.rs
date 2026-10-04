@@ -13,6 +13,7 @@ use sqlx::PgPool;
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
+use super::padding::{AMOUNT_WIDTH, pad_to_width};
 use super::storage;
 
 const TABLE: &str = "wealth_valuations";
@@ -52,7 +53,7 @@ impl PgValuations {
             account_id: AccountId(account_id),
             as_of,
             amount: Money::new(
-                Decimal::from_str(text).map_err(|_| WealthError::Cipher)?,
+                Decimal::from_str(text.trim()).map_err(|_| WealthError::Cipher)?,
                 Currency::from_str(&currency)?,
             ),
             source: ValuationSource::from_code(&source)?,
@@ -64,10 +65,8 @@ impl PgValuations {
 #[async_trait]
 impl ValuationRepository for PgValuations {
     async fn insert(&self, valuation: &Valuation) -> Result<(), WealthError> {
-        let amount = self.cipher.encrypt(
-            valuation.amount.amount.to_string().as_bytes(),
-            &Self::context(valuation.id),
-        )?;
+        let padded = pad_to_width(&valuation.amount.amount.to_string(), AMOUNT_WIDTH)?;
+        let amount = self.cipher.encrypt(&padded, &Self::context(valuation.id))?;
         sqlx::query(&format!(
             "INSERT INTO wealth_valuations ({COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7)"
         ))
@@ -203,6 +202,39 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../../migrations")]
+    async fn ciphertext_length_does_not_depend_on_the_amount(pool: PgPool) {
+        let account = seeded_account(&pool).await;
+        let repository = PgValuations::new(pool.clone(), Arc::new(FakeCipher));
+        let small = valuation(
+            &account,
+            date!(2026 - 09 - 01),
+            100,
+            datetime!(2026-09-01 9:00 UTC),
+        );
+        let large = valuation(
+            &account,
+            date!(2026 - 10 - 01),
+            12_345_678_912,
+            datetime!(2026-10-01 9:00 UTC),
+        );
+        repository.insert(&small).await.unwrap();
+        repository.insert(&large).await.unwrap();
+
+        let lengths: Vec<i32> =
+            sqlx::query_scalar("SELECT octet_length(amount) FROM wealth_valuations")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+
+        assert_eq!(lengths.len(), 2);
+        assert_eq!(lengths[0], lengths[1]);
+        assert_eq!(
+            repository.for_account(account.id).await.unwrap(),
+            vec![small, large]
+        );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
     async fn for_account_is_ordered_and_amounts_are_encrypted(pool: PgPool) {
         let account = seeded_account(&pool).await;
         let repository = PgValuations::new(pool.clone(), Arc::new(FakeCipher));
@@ -245,7 +277,8 @@ mod tests {
             column: "amount",
             row_id: later_id,
         };
-        assert_eq!(FakeCipher.decrypt(&raw, &context).unwrap(), b"123456.78");
+        let clear = FakeCipher.decrypt(&raw, &context).unwrap();
+        assert_eq!(clear.trim_ascii(), b"123456.78");
     }
 
     #[sqlx::test(migrations = "../../migrations")]

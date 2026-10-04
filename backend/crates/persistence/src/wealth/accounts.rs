@@ -11,6 +11,7 @@ use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use super::padding::pad_to_block;
 use super::storage;
 
 const TABLE: &str = "wealth_accounts";
@@ -48,7 +49,7 @@ impl PgAccounts {
         text: &str,
     ) -> Result<Vec<u8>, WealthError> {
         self.cipher.encrypt(
-            text.as_bytes(),
+            &pad_to_block(text),
             &CipherContext {
                 table: TABLE,
                 column,
@@ -71,7 +72,9 @@ impl PgAccounts {
                 row_id: id.0,
             },
         )?;
-        String::from_utf8(bytes).map_err(|_| WealthError::Cipher)
+        String::from_utf8(bytes)
+            .map(|text| text.trim().to_owned())
+            .map_err(|_| WealthError::Cipher)
     }
 
     fn to_account(&self, row: AccountRow) -> Result<Account, WealthError> {
@@ -225,13 +228,58 @@ mod tests {
             row_id: id,
         };
         assert_eq!(
-            FakeCipher.decrypt(&name, &context("name")).unwrap(),
+            FakeCipher
+                .decrypt(&name, &context("name"))
+                .unwrap()
+                .trim_ascii(),
             b"PEA Bourso"
         );
         assert_eq!(
-            FakeCipher.decrypt(&notes, &context("notes")).unwrap(),
+            FakeCipher
+                .decrypt(&notes, &context("notes"))
+                .unwrap()
+                .trim_ascii(),
             b"ouvert en 2019"
         );
         assert!(FakeCipher.decrypt(&name, &context("notes")).is_err());
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn ciphertext_length_does_not_depend_on_name_or_notes_length(pool: PgPool) {
+        let repository = repository(pool.clone());
+        let at = OffsetDateTime::from_unix_timestamp(1_800_000_000).unwrap();
+        let short = Account::open(
+            "A",
+            AccountKind::Savings,
+            Owner::Personal,
+            Currency::EUR,
+            Some("n"),
+            at,
+        )
+        .unwrap();
+        let long_name = "B".repeat(40);
+        let long = Account::open(
+            &long_name,
+            AccountKind::Savings,
+            Owner::Personal,
+            Currency::EUR,
+            Some("une note un peu plus longue"),
+            at,
+        )
+        .unwrap();
+        repository.insert(&short).await.unwrap();
+        repository.insert(&long).await.unwrap();
+
+        let lengths: Vec<(i32, i32)> = sqlx::query_as(
+            "SELECT octet_length(name), octet_length(notes) FROM wealth_accounts ORDER BY created_at, id",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(lengths[0], lengths[1]);
+        let mut stored = repository.list().await.unwrap();
+        stored.sort_by_key(|account| account.name.len());
+        assert_eq!(stored, vec![short, long]);
     }
 }
