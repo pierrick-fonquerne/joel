@@ -151,6 +151,19 @@ mod tests {
         }
     }
 
+    struct SlowUnlocker {
+        attempts: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl VaultUnlocker for SlowUnlocker {
+        async fn unlock(&self) -> Result<Arc<dyn FieldCipher>, String> {
+            self.attempts.fetch_add(1, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            Ok(Arc::new(FakeCipher))
+        }
+    }
+
     fn lazy_pool() -> PgPool {
         PgPool::connect_lazy("postgres://joel:unused@127.0.0.1:1/joel").unwrap()
     }
@@ -180,6 +193,20 @@ mod tests {
         for _ in 0..3 {
             assert!(matches!(gate.wealth().await, Err(WealthError::VaultSealed)));
         }
+        assert_eq!(unlocker.attempts.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn concurrent_calls_unlock_only_once() {
+        let unlocker = Arc::new(SlowUnlocker {
+            attempts: AtomicUsize::new(0),
+        });
+        let gate = WealthGate::new(lazy_pool(), unlocker.clone(), Duration::ZERO);
+
+        let (first, second) = tokio::join!(gate.wealth(), gate.wealth());
+
+        assert!(first.is_ok());
+        assert!(second.is_ok());
         assert_eq!(unlocker.attempts.load(Ordering::SeqCst), 1);
     }
 }

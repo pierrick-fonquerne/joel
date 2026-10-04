@@ -75,16 +75,18 @@ fn core_router(state: AppState) -> Router {
 
 /// Builds the full application router, including the semantic recall route.
 ///
-/// Calls [`build_router_with`] for the core routes and, when the environment
-/// variable `JOEL_EIDOS_ENDPOINT` is set, connects to the `EidosDB` gRPC
-/// server, loads the `CandleEmbedder`, and merges the knowledge sub-router.
+/// Builds the application state, tries one wealth vault unlock (a sealed
+/// vault only logs a warning), then builds the core router with
+/// `core_router`. When the environment variable `JOEL_EIDOS_ENDPOINT` is set,
+/// connects to the `EidosDB` gRPC server, loads the `CandleEmbedder`, and
+/// merges the knowledge sub-router.
 ///
 /// When `JOEL_EIDOS_ENDPOINT` is absent the recall route is simply not
 /// mounted; the rest of the API works as normal.
 ///
 /// # Errors
 ///
-/// Propagates [`domain::auth::model::AuthError`] from [`build_router_with`],
+/// Propagates [`domain::auth::model::AuthError`] from the state assembly,
 /// and any error produced by the embedder load or the gRPC client connect.
 pub async fn build_app(
     pool: PgPool,
