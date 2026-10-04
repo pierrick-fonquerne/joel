@@ -416,6 +416,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn staleness_boundary_is_forty_five_days() {
+        let wealth = wealth_with(FakeRates::default());
+        let on_boundary = wealth
+            .create_account(savings(Currency::EUR), NOW)
+            .await
+            .unwrap();
+        let past_boundary = wealth
+            .create_account(savings(Currency::EUR), NOW)
+            .await
+            .unwrap();
+        wealth
+            .record_valuation(on_boundary.id, date!(2026 - 08 - 20), Decimal::ONE, NOW)
+            .await
+            .unwrap();
+        wealth
+            .record_valuation(past_boundary.id, date!(2026 - 08 - 19), Decimal::ONE, NOW)
+            .await
+            .unwrap();
+
+        let summaries = wealth
+            .account_summaries(date!(2026 - 10 - 04))
+            .await
+            .unwrap();
+
+        let stale_of = |id| {
+            summaries
+                .iter()
+                .find(|s| s.account.id == id)
+                .unwrap()
+                .is_stale
+        };
+        assert!(!stale_of(on_boundary.id));
+        assert!(stale_of(past_boundary.id));
+    }
+
+    #[tokio::test]
+    async fn history_returns_one_point_per_month_end_then_the_end_date() {
+        let wealth = wealth_with(FakeRates::default());
+        let account = wealth
+            .create_account(savings(Currency::EUR), NOW)
+            .await
+            .unwrap();
+        wealth
+            .record_valuation(
+                account.id,
+                date!(2026 - 08 - 15),
+                Decimal::new(1000, 0),
+                NOW,
+            )
+            .await
+            .unwrap();
+        wealth
+            .record_valuation(
+                account.id,
+                date!(2026 - 09 - 20),
+                Decimal::new(1500, 0),
+                NOW,
+            )
+            .await
+            .unwrap();
+
+        let points = wealth
+            .net_worth_history(date!(2026 - 08 - 01), date!(2026 - 10 - 04))
+            .await
+            .unwrap();
+
+        let observed: Vec<_> = points
+            .iter()
+            .map(|point| (point.as_of, point.total))
+            .collect();
+        assert_eq!(
+            observed,
+            vec![
+                (date!(2026 - 08 - 31), Money::eur(Decimal::new(1000, 0))),
+                (date!(2026 - 09 - 30), Money::eur(Decimal::new(1500, 0))),
+                (date!(2026 - 10 - 04), Money::eur(Decimal::new(1500, 0))),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn net_worth_skips_archived_account_without_rate() {
+        let usd: Currency = "USD".parse().unwrap();
+        let rates = FakeRates::default().with(usd, date!(2026 - 10 - 02), Decimal::new(2, 0));
+        let wealth = wealth_with(rates);
+        let account = wealth.create_account(savings(usd), NOW).await.unwrap();
+        wealth
+            .record_valuation(account.id, date!(2026 - 01 - 05), Decimal::new(100, 0), NOW)
+            .await
+            .unwrap();
+        wealth.archive_account(account.id).await.unwrap();
+
+        let net_worth = wealth.net_worth(date!(2026 - 10 - 04)).await.unwrap();
+
+        assert_eq!(net_worth.total, Money::eur(Decimal::ZERO));
+    }
+
+    #[tokio::test]
     async fn history_rejects_inverted_range() {
         let wealth = wealth_with(FakeRates::default());
         assert_eq!(
