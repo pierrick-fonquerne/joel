@@ -29,11 +29,17 @@ services:
       WEBAUTHN_RP_ID: joel.fonquerne.com
       WEBAUTHN_ORIGIN: https://joel.fonquerne.com
       SESSION_TTL_DAYS: "30"
+      EGIDE_URL: http://egide:8200
+      EGIDE_TOKEN_FILE: /run/secrets/egide_token
       RUST_LOG: info
+    secrets:
+      - egide_token
     networks: [edge, data]
     depends_on:
       postgres:
         condition: service_healthy
+      egide:
+        condition: service_started
 
   runner:
     build:
@@ -66,6 +72,18 @@ services:
       timeout: 3s
       retries: 10
 
+  egide:
+    image: nubster/egide:0.1.0
+    restart: unless-stopped
+    environment:
+      EGIDE_ENV: production
+      EGIDE_DATA_DIR: /var/lib/egide
+      EGIDE_BIND_ADDRESS: 0.0.0.0:8200
+      RUST_LOG: info
+    volumes:
+      - egide_data:/var/lib/egide
+    networks: [data]
+
   ntfy:
     image: binwiederhier/ntfy
     restart: unless-stopped
@@ -95,9 +113,14 @@ networks:
     internal: true
   internet:
 
+secrets:
+  egide_token:
+    file: ./secrets/egide_token
+
 volumes:
   caddy_data:
   caddy_config:
   pgdata:
   ntfy_cache:
   ntfy_data:
+  egide_data:
