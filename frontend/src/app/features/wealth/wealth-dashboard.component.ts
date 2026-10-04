@@ -1,12 +1,15 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { LoggerService } from '../../core/logging/logger.service';
+import { errorCodeOf, wealthErrorMessage } from './wealth-error-messages';
 import { DiscreetModeService } from './discreet-mode.service';
 import { NetWorthChartComponent } from './net-worth-chart.component';
 import { VaultSealedComponent } from './vault-sealed.component';
 import { WealthAmountPipe } from './wealth-amount.pipe';
 import { WealthService } from './wealth.service';
 import { ACCOUNT_KIND_LABELS, AccountKind, NetWorth, Owner, OWNER_LABELS } from './wealth.models';
+
+const UNAVAILABLE_MESSAGE = 'Patrimoine indisponible, réessaie plus tard';
 
 type OwnerSelection = Owner | 'total';
 
@@ -47,7 +50,11 @@ function isoDate(date: Date): string {
           </p>
         }
 
-        <app-net-worth-chart [points]="chartPoints()" />
+        @if (historyError(); as message) {
+          <p class="wealth__error" role="alert">{{ message }}</p>
+        } @else {
+          <app-net-worth-chart [points]="chartPoints()" />
+        }
 
         @if (selectedOwner() === 'total') {
           <ul class="wealth__kinds">
@@ -64,6 +71,8 @@ function isoDate(date: Date): string {
             Voir les comptes
           }
         </a>
+      } @else if (loadError()) {
+        <p class="wealth__error" role="alert">{{ loadError() }}</p>
       } @else {
         <p>Chargement du patrimoine...</p>
       }
@@ -74,6 +83,7 @@ function isoDate(date: Date): string {
     .wealth__owners { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
     .wealth__owners .active { font-weight: 700; text-decoration: underline; }
     .wealth__total { font-size: 2.2rem; font-weight: 700; margin: 0.5rem 0 0; }
+    .wealth__error { color: #e0a458; }
     .wealth__delta { color: #8fa3b1; margin: 0 0 1rem; }
     .wealth__kinds { list-style: none; padding: 0; }
     .wealth__kinds li { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #222a31; }
@@ -89,6 +99,8 @@ export class WealthDashboardComponent {
   readonly selectedOwner = signal<OwnerSelection>('total');
   protected readonly current = signal<NetWorth | null>(null);
   protected readonly history = signal<NetWorth[]>([]);
+  protected readonly loadError = signal<string | null>(null);
+  protected readonly historyError = signal<string | null>(null);
   protected readonly ownerOptions: { value: OwnerSelection; label: string }[] = [
     { value: 'total', label: 'Total' },
     { value: 'personal', label: OWNER_LABELS.personal },
@@ -141,15 +153,24 @@ export class WealthDashboardComponent {
   private async load(): Promise<void> {
     const today = new Date();
     const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    await Promise.all([this.loadCurrent(), this.loadHistory(isoDate(oneYearAgo), isoDate(today))]);
+  }
+
+  private async loadCurrent(): Promise<void> {
     try {
-      const [current, history] = await Promise.all([
-        this.wealth.netWorth(),
-        this.wealth.netWorthHistory(isoDate(oneYearAgo), isoDate(today)),
-      ]);
-      this.current.set(current);
-      this.history.set(history);
-    } catch {
+      this.current.set(await this.wealth.netWorth());
+    } catch (error) {
+      this.loadError.set(wealthErrorMessage(errorCodeOf(error), UNAVAILABLE_MESSAGE));
       this.logger.error('wealth.dashboard.load_failed', { isVaultSealed: this.wealth.vaultSealed() });
+    }
+  }
+
+  private async loadHistory(from: string, to: string): Promise<void> {
+    try {
+      this.history.set(await this.wealth.netWorthHistory(from, to));
+    } catch (error) {
+      this.historyError.set(wealthErrorMessage(errorCodeOf(error), UNAVAILABLE_MESSAGE));
+      this.logger.error('wealth.dashboard.history_failed', { isVaultSealed: this.wealth.vaultSealed() });
     }
   }
 }

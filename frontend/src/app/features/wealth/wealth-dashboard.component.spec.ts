@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { WealthDashboardComponent } from './wealth-dashboard.component';
@@ -65,6 +66,38 @@ describe('WealthDashboardComponent', () => {
     for (const leaked of ['150', '10 000', '110 000', '40 000', '140', '7,1']) {
       expect(text).not.toContain(leaked);
     }
+  }));
+
+  it('shows the mapped message when the net worth call fails with a known code', fakeAsync(() => {
+    wealth.netWorth.and.rejectWith(new HttpErrorResponse({ status: 422, error: { code: 'exchange_rate_missing' } }));
+    const fixture = TestBed.createComponent(WealthDashboardComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent!;
+    expect(text).toContain('Taux BCE introuvable pour un relevé en devise');
+    expect(text).not.toContain('Chargement');
+  }));
+
+  it('shows the fallback message when the failure has no known code', fakeAsync(() => {
+    wealth.netWorth.and.rejectWith(new HttpErrorResponse({ status: 500, error: null }));
+    const fixture = TestBed.createComponent(WealthDashboardComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Patrimoine indisponible, réessaie plus tard');
+  }));
+
+  it('keeps today total when only the history fails', fakeAsync(() => {
+    wealth.netWorthHistory.and.rejectWith(new HttpErrorResponse({ status: 400, error: { code: 'invalid_range' } }));
+    const fixture = TestBed.createComponent(WealthDashboardComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.textContent!.replace(/\s/g, ' ')).toContain('150 000,00 €');
+    expect(element.textContent).toContain('Période invalide');
+    expect(element.querySelector('app-net-worth-chart')).toBeNull();
   }));
 
   it('explains the sealed vault instead of an error', fakeAsync(() => {

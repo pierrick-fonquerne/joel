@@ -14,6 +14,8 @@ const WEALTH_ERROR_MESSAGES: Record<string, string> = {
   archived_account: 'Ce compte est archivé',
   invalid_date: 'Date invalide',
   account_not_found: 'Compte introuvable',
+  exchange_rate_missing: 'Taux BCE introuvable pour un relevé en devise',
+  invalid_range: 'Période invalide',
   wealth_vault_sealed: 'Coffre scellé : descelle Egide puis réessaie',
 };
 
