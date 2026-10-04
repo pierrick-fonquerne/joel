@@ -59,7 +59,12 @@ describe('WealthDashboardComponent', () => {
     flushMicrotasks();
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.wealth__discreet')!.click();
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('150');
+    const text = (fixture.nativeElement as HTMLElement).textContent!.replace(/\s/g, ' ');
+    expect(text).toContain('•••••');
+    expect(text).toContain('(•••)');
+    for (const leaked of ['150', '10 000', '110 000', '40 000', '140', '7,1']) {
+      expect(text).not.toContain(leaked);
+    }
   }));
 
   it('explains the sealed vault instead of an error', fakeAsync(() => {
