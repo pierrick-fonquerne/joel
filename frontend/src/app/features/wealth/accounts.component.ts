@@ -1,11 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { HttpErrorResponse } from '@angular/common/http';
 import { LoggerService } from '../../core/logging/logger.service';
 import { DiscreetModeService } from './discreet-mode.service';
 import { VaultSealedComponent } from './vault-sealed.component';
 import { WealthAmountPipe } from './wealth-amount.pipe';
+import { errorCodeOf, wealthErrorMessage } from './wealth-error-messages';
 import { WealthService } from './wealth.service';
 import { Account, ACCOUNT_KIND_LABELS, ACCOUNT_KINDS, AccountKind, Owner, OWNER_LABELS } from './wealth.models';
 
@@ -19,6 +19,9 @@ const OWNERS: readonly Owner[] = ['personal', 'company'];
     @if (wealth.vaultSealed()) {
       <app-vault-sealed />
     } @else {
+      @if (errorMessage(); as message) {
+        <p role="alert" class="form__error">{{ message }}</p>
+      }
       @for (group of groups(); track group.owner) {
         <h3>{{ group.label }}</h3>
         <ul class="accounts">
@@ -55,10 +58,7 @@ const OWNERS: readonly Owner[] = ['personal', 'company'];
         </select>
         <input name="currency" maxlength="3" [ngModel]="draftCurrency()" (ngModelChange)="draftCurrency.set($event.toUpperCase())" />
         <input name="notes" placeholder="Notes" [ngModel]="draftNotes()" (ngModelChange)="draftNotes.set($event)" />
-        @if (errorMessage(); as message) {
-          <p role="alert" class="form__error">{{ message }}</p>
-        }
-        <button type="submit">Créer</button>
+        <button type="submit" [disabled]="isCreating()">Créer</button>
       </form>
     }
   `,
@@ -85,6 +85,7 @@ export class AccountsComponent {
   protected readonly accounts = signal<Account[]>([]);
   protected readonly pendingArchiveId = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly isCreating = signal(false);
   readonly draftName = signal('');
   readonly draftKind = signal<AccountKind>('bank_account');
   readonly draftOwner = signal<Owner>('personal');
@@ -104,10 +105,14 @@ export class AccountsComponent {
   }
 
   async create(): Promise<void> {
+    if (this.isCreating()) {
+      return;
+    }
+    this.isCreating.set(true);
     this.errorMessage.set(null);
     try {
       await this.wealth.createAccount({
-        name: this.draftName(),
+        name: this.draftName().trim(),
         kind: this.draftKind(),
         owner: this.draftOwner(),
         currency: this.draftCurrency(),
@@ -117,14 +122,9 @@ export class AccountsComponent {
       this.draftNotes.set('');
       await this.reload();
     } catch (error) {
-      const code = error instanceof HttpErrorResponse ? error.error?.code : undefined;
-      this.errorMessage.set(
-        code === 'unsupported_currency'
-          ? 'Devise non suivie par la BCE : crée le compte en EUR'
-          : code === 'empty_account_name'
-            ? 'Donne un nom au compte'
-            : 'Création impossible, réessaie',
-      );
+      this.errorMessage.set(wealthErrorMessage(errorCodeOf(error), 'Création impossible, réessaie'));
+    } finally {
+      this.isCreating.set(false);
     }
   }
 
@@ -134,10 +134,12 @@ export class AccountsComponent {
       return;
     }
     this.pendingArchiveId.set(null);
+    this.errorMessage.set(null);
     try {
       await this.wealth.archiveAccount(id);
       await this.reload();
-    } catch {
+    } catch (error) {
+      this.errorMessage.set(wealthErrorMessage(errorCodeOf(error), 'Archivage impossible, réessaie'));
       this.logger.error('wealth.account.archive_failed', {});
     }
   }

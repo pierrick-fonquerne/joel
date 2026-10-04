@@ -1,6 +1,7 @@
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ValuationFormComponent } from './valuation-form.component';
 import { WealthService } from './wealth.service';
 
@@ -70,5 +71,30 @@ describe('ValuationFormComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent!;
     expect(text).toContain('•••••');
     expect(text).not.toContain('40');
+  }));
+
+  it('toggles the sign then posts a negative amount', fakeAsync(() => {
+    spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+    const fixture = TestBed.createComponent(ValuationFormComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.amount.set('180 000');
+    fixture.componentInstance.toggleSign();
+    expect(fixture.componentInstance.amount()).toBe('-180 000');
+    void fixture.componentInstance.submit();
+    flushMicrotasks();
+    expect(wealth.recordValuation).toHaveBeenCalledWith('a1', '-180000', jasmine.any(String));
+    fixture.componentInstance.toggleSign();
+    expect(fixture.componentInstance.amount()).toBe('180 000');
+  }));
+
+  it('shows the mapped message for an api error code', fakeAsync(() => {
+    wealth.recordValuation.and.rejectWith(new HttpErrorResponse({ status: 400, error: { code: 'positive_loan_valuation' } }));
+    const fixture = TestBed.createComponent(ValuationFormComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.amount.set('100');
+    void fixture.componentInstance.submit();
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Un prêt se saisit en négatif');
   }));
 });

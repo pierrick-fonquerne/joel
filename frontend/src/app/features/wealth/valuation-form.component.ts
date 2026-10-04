@@ -1,23 +1,14 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { HttpErrorResponse } from '@angular/common/http';
 import { LoggerService } from '../../core/logging/logger.service';
 import { normalizeAmount } from './amount-input';
 import { DiscreetModeService } from './discreet-mode.service';
 import { VaultSealedComponent } from './vault-sealed.component';
 import { WealthAmountPipe } from './wealth-amount.pipe';
+import { errorCodeOf, wealthErrorMessage } from './wealth-error-messages';
 import { WealthService } from './wealth.service';
 import { Valuation } from './wealth.models';
-
-const ERROR_MESSAGES: Record<string, string> = {
-  invalid_amount: 'Montant invalide',
-  negative_asset_valuation: 'Un actif ne peut pas être négatif',
-  positive_loan_valuation: 'Un prêt se saisit en négatif',
-  future_valuation: 'La date est dans le futur',
-  archived_account: 'Ce compte est archivé',
-  account_not_found: 'Compte introuvable',
-};
 
 function localToday(): string {
   const now = new Date();
@@ -35,7 +26,10 @@ function localToday(): string {
       <form (ngSubmit)="submit()" class="form">
         <label>
           Montant
-          <input name="amount" inputmode="decimal" autocomplete="off" [ngModel]="amount()" (ngModelChange)="amount.set($event)" required />
+          <span class="form__amount">
+            <input name="amount" inputmode="decimal" autocomplete="off" [ngModel]="amount()" (ngModelChange)="amount.set($event)" required />
+            <button type="button" class="form__sign" aria-label="Inverser le signe" (click)="toggleSign()">±</button>
+          </span>
         </label>
         <label>
           Date
@@ -62,6 +56,8 @@ function localToday(): string {
     .form { display: flex; flex-direction: column; gap: 0.9rem; max-width: 24rem; }
     .form input { font-size: 1.3rem; min-height: 2.9rem; width: 100%; }
     .form button { min-height: 3rem; font-size: 1.1rem; }
+    .form__amount { display: flex; gap: 0.5rem; }
+    .form__sign { min-width: 3rem; min-height: 2.9rem; font-size: 1.3rem; }
     .form__error { color: #f08a7e; }
     .history { list-style: none; padding: 0; }
     .history li { display: flex; justify-content: space-between; padding: 0.3rem 0; }
@@ -87,10 +83,15 @@ export class ValuationFormComponent {
       .catch(() => this.logger.error('wealth.valuation.history_failed', {}));
   }
 
+  toggleSign(): void {
+    const current = this.amount().trim();
+    this.amount.set(current.startsWith('-') ? current.slice(1).trimStart() : `-${current}`);
+  }
+
   async submit(): Promise<void> {
     const amount = normalizeAmount(this.amount());
     if (amount === null) {
-      this.errorMessage.set(ERROR_MESSAGES['invalid_amount']);
+      this.errorMessage.set(wealthErrorMessage('invalid_amount', 'Montant invalide'));
       return;
     }
     this.isSaving.set(true);
@@ -100,8 +101,7 @@ export class ValuationFormComponent {
       this.logger.info('wealth.valuation.recorded', {});
       await this.router.navigateByUrl('/patrimoine/comptes');
     } catch (error) {
-      const code = error instanceof HttpErrorResponse ? (error.error?.code as string | undefined) : undefined;
-      this.errorMessage.set((code && ERROR_MESSAGES[code]) ?? 'Enregistrement impossible, réessaie');
+      this.errorMessage.set(wealthErrorMessage(errorCodeOf(error), 'Enregistrement impossible, réessaie'));
     } finally {
       this.isSaving.set(false);
     }

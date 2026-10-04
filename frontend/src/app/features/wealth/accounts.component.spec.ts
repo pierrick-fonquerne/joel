@@ -1,6 +1,7 @@
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AccountsComponent } from './accounts.component';
 import { WealthService } from './wealth.service';
 import { Account } from './wealth.models';
@@ -75,5 +76,40 @@ describe('AccountsComponent', () => {
     void component.archive('a1');
     flushMicrotasks();
     expect(wealth.archiveAccount).toHaveBeenCalledWith('a1');
+  }));
+
+  it('shows the mapped message when creation fails with an api code', fakeAsync(() => {
+    wealth.createAccount.and.rejectWith(new HttpErrorResponse({ status: 400, error: { code: 'invalid_currency' } }));
+    const fixture = TestBed.createComponent(AccountsComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    void fixture.componentInstance.create();
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Devise invalide');
+  }));
+
+  it('shows an error above the list when archiving fails', fakeAsync(() => {
+    wealth.archiveAccount.and.rejectWith(new HttpErrorResponse({ status: 404, error: { code: 'account_not_found' } }));
+    const fixture = TestBed.createComponent(AccountsComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    void fixture.componentInstance.archive('a1');
+    void fixture.componentInstance.archive('a1');
+    flushMicrotasks();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Compte introuvable');
+  }));
+
+  it('ignores a second create while one is in flight and trims the name', fakeAsync(() => {
+    const fixture = TestBed.createComponent(AccountsComponent);
+    fixture.detectChanges();
+    flushMicrotasks();
+    fixture.componentInstance.draftName.set('  Livret A  ');
+    void fixture.componentInstance.create();
+    void fixture.componentInstance.create();
+    flushMicrotasks();
+    expect(wealth.createAccount).toHaveBeenCalledTimes(1);
+    expect(wealth.createAccount.calls.mostRecent().args[0].name).toBe('Livret A');
   }));
 });
