@@ -3,6 +3,7 @@
 pub mod auth_routes;
 pub mod knowledge_routes;
 pub mod state;
+pub mod wealth_routes;
 pub mod wealth_vault;
 pub mod webauthn_routes;
 
@@ -70,6 +71,7 @@ fn core_router(state: AppState) -> Router {
         )
         .merge(auth_routes::router())
         .merge(webauthn_routes::router())
+        .merge(wealth_routes::router())
         .with_state(state)
 }
 
