@@ -45,14 +45,14 @@ function isoDate(date: Date): string {
         <p class="wealth__total">{{ selectedTotal() | wealthAmount: 'EUR' : discreet.isDiscreet() }}</p>
         @if (delta(); as change) {
           <p class="wealth__delta">
-            {{ change.sign }}{{ change.signedAmount | wealthAmount: 'EUR' : discreet.isDiscreet() }} {{ discreet.isDiscreet() ? '(•••)' : '(' + change.percent + ')' }}
+            {{ discreet.isDiscreet() ? '' : change.sign }}{{ change.signedAmount | wealthAmount: 'EUR' : discreet.isDiscreet() }} {{ discreet.isDiscreet() ? '(•••)' : '(' + change.percent + ')' }}
             depuis la fin du mois dernier
           </p>
         }
 
         @if (historyError(); as message) {
           <p class="wealth__error" role="alert">{{ message }}</p>
-        } @else {
+        } @else if (!discreet.isDiscreet()) {
           <app-net-worth-chart [points]="chartPoints()" />
         }
 

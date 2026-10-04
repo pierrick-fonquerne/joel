@@ -63,6 +63,9 @@ describe('WealthDashboardComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent!.replace(/\s/g, ' ');
     expect(text).toContain('•••••');
     expect(text).toContain('(•••)');
+    expect(text).not.toContain('+');
+    expect(text).not.toContain('-');
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-net-worth-chart')).toBeNull();
     for (const leaked of ['150', '10 000', '110 000', '40 000', '140', '7,1']) {
       expect(text).not.toContain(leaked);
     }
