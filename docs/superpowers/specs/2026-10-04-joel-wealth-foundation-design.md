@@ -175,7 +175,7 @@ Invariants vérifiés par le domaine :
 
 | Table | Colonnes en clair | Colonnes chiffrées (`BYTEA`) |
 |---|---|---|
-| `wealth_accounts` | `id`, `kind`, `brokerage_envelope`, `owner`, `currency`, `is_archived`, `created_at` | `name`, `notes` |
+| `wealth_accounts` | `id`, `kind` (le code porte l'enveloppe : `brokerage_pea`, `brokerage_cto`), `owner`, `currency`, `is_archived`, `created_at` | `name`, `notes` |
 | `wealth_valuations` | `id`, `account_id`, `as_of`, `currency`, `source`, `recorded_at` | `amount` (décimal sérialisé en texte avant chiffrement) |
 | `wealth_exchange_rates` | `currency`, `on_date`, `units_per_eur` (unités de devise pour 1 EUR, convention BCE) | aucune (donnée publique) |
 | `wealth_keys` | `version`, `egide_key_name`, `created_at` | `wrapped_key` (déjà chiffrée par Egide) |

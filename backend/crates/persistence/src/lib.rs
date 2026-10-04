@@ -1,6 +1,7 @@
 //! `PostgreSQL` adapters for the Joel domain ports.
 
 pub mod auth;
+pub mod wealth;
 
 use sqlx::PgPool;
 
