@@ -312,3 +312,31 @@ async fn missing_exchange_rate_answers_422(pool: PgPool) {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(error["code"], "exchange_rate_missing");
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn wealth_responses_are_never_cached(pool: PgPool) {
+    let (app, cookie) = app_and_cookie(pool, Arc::new(FakeUnlocker)).await;
+    let ok = app
+        .clone()
+        .oneshot(
+            Request::get("/api/wealth/accounts")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    assert_eq!(ok.headers()[header::CACHE_CONTROL], "no-store");
+
+    let rejected = app
+        .oneshot(
+            Request::get("/api/wealth/net-worth")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(rejected.headers()[header::CACHE_CONTROL], "no-store");
+}

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use time::macros::format_description;
 use time::{Date, OffsetDateTime};
+use tower_http::set_header::SetResponseHeaderLayer;
 use uuid::Uuid;
 
 use crate::auth_routes::CurrentUser;
@@ -35,6 +36,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/wealth/net-worth", get(net_worth))
         .route("/api/wealth/net-worth/history", get(net_worth_history))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ))
 }
 
 /// Body of `POST /api/wealth/accounts`.
@@ -114,7 +119,11 @@ impl From<WealthError> for ApiError {
             WealthError::AccountNotFound => StatusCode::NOT_FOUND,
             WealthError::ExchangeRateMissing { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             WealthError::VaultSealed => StatusCode::SERVICE_UNAVAILABLE,
-            WealthError::Cipher | WealthError::Storage(_) => {
+            WealthError::Storage(message) => {
+                tracing::error!(code = error.code(), error = %message, "wealth internal failure");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            WealthError::Cipher => {
                 tracing::error!(code = error.code(), "wealth internal failure");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
