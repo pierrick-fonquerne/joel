@@ -30,14 +30,16 @@ pub enum UnlockError {
 
 /// [`FieldCipher`] backed by an Egide-wrapped data key.
 pub struct EgideEnvelopeCipher {
-    key: Zeroizing<[u8; 32]>,
+    cipher: Aes256Gcm,
 }
 
 impl EgideEnvelopeCipher {
     /// Builds a cipher from a clear data key (tests and unlock).
     #[must_use]
-    pub const fn from_key(key: Zeroizing<[u8; 32]>) -> Self {
-        Self { key }
+    pub fn from_key(key: Zeroizing<[u8; 32]>) -> Self {
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_slice()));
+        drop(key);
+        Self { cipher }
     }
 
     /// Unwraps the stored data key, or generates and stores one on first start.
@@ -61,10 +63,12 @@ impl EgideEnvelopeCipher {
 }
 
 fn to_key(bytes: &[u8]) -> Result<Zeroizing<[u8; 32]>, UnlockError> {
-    let array: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| UnlockError::InvalidKeyLength)?;
-    Ok(Zeroizing::new(array))
+    if bytes.len() != 32 {
+        return Err(UnlockError::InvalidKeyLength);
+    }
+    let mut key = Zeroizing::new([0_u8; 32]);
+    key.copy_from_slice(bytes);
+    Ok(key)
 }
 
 /// Re-wraps the current data key with the latest Egide key version and stores
@@ -86,10 +90,10 @@ pub async fn rewrap_stored_key(
 
 impl FieldCipher for EgideEnvelopeCipher {
     fn encrypt(&self, plaintext: &[u8], context: &CipherContext) -> Result<Vec<u8>, WealthError> {
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(self.key.as_slice()));
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let aad = context.aad();
-        let sealed = cipher
+        let sealed = self
+            .cipher
             .encrypt(
                 &nonce,
                 Payload {
@@ -108,9 +112,8 @@ impl FieldCipher for EgideEnvelopeCipher {
         if sealed.is_empty() {
             return Err(WealthError::Cipher);
         }
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(self.key.as_slice()));
         let aad = context.aad();
-        cipher
+        self.cipher
             .decrypt(
                 Nonce::from_slice(nonce),
                 Payload {
@@ -203,7 +206,7 @@ mod tests {
             .await;
         let store = FakeWrappedKeys::default();
 
-        EgideEnvelopeCipher::unlock(&EgideClient::new(server.uri(), "t"), &store)
+        let unlocked = EgideEnvelopeCipher::unlock(&EgideClient::new(server.uri(), "t"), &store)
             .await
             .unwrap();
 
@@ -211,6 +214,14 @@ mod tests {
             store.current().await.unwrap().as_deref(),
             Some("egide:v1:wrapped")
         );
+        let mut key = [0_u8; 32];
+        for (index, byte) in key.iter_mut().enumerate() {
+            *byte = u8::try_from(index).unwrap();
+        }
+        let ctx = context("amount", Uuid::new_v4());
+        let sealed = unlocked.encrypt(b"42", &ctx).unwrap();
+        let reference = EgideEnvelopeCipher::from_key(Zeroizing::new(key));
+        assert_eq!(reference.decrypt(&sealed, &ctx).unwrap(), b"42");
     }
 
     #[tokio::test]
@@ -270,12 +281,10 @@ mod tests {
             ))
             .mount(&short)
             .await;
-        let result = EgideEnvelopeCipher::unlock(
-            &EgideClient::new(short.uri(), "t"),
-            &FakeWrappedKeys::default(),
-        )
-        .await;
+        let store = FakeWrappedKeys::default();
+        let result = EgideEnvelopeCipher::unlock(&EgideClient::new(short.uri(), "t"), &store).await;
         assert!(matches!(result, Err(UnlockError::InvalidKeyLength)));
+        assert_eq!(store.current().await.unwrap(), None);
     }
 
     #[tokio::test]
@@ -311,5 +320,33 @@ mod tests {
             .await,
             Err(UnlockError::NoStoredKey)
         ));
+    }
+
+    #[tokio::test]
+    async fn rewrap_is_a_no_op_when_the_ciphertext_is_unchanged() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transit/rewrap/joel-wealth"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "ciphertext": "egide:v1:wrapped" })),
+            )
+            .mount(&server)
+            .await;
+        let store = FakeWrappedKeys::default();
+        store
+            .insert("egide:v1:wrapped", WEALTH_KEY_NAME)
+            .await
+            .unwrap();
+
+        rewrap_stored_key(&EgideClient::new(server.uri(), "t"), &store)
+            .await
+            .unwrap();
+
+        assert_eq!(store.keys.lock().unwrap().len(), 1);
+        assert_eq!(
+            store.current().await.unwrap().as_deref(),
+            Some("egide:v1:wrapped")
+        );
     }
 }
