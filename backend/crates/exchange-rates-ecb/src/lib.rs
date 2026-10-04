@@ -11,6 +11,10 @@ use time::macros::format_description;
 pub const ECB_LAST_90_DAYS_URL: &str =
     "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml";
 
+/// Reference rates since 1999.
+pub const ECB_FULL_HISTORY_URL: &str =
+    "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
+
 /// One ECB reference rate: units of `currency` for one euro on `on`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EcbRate {
@@ -69,8 +73,20 @@ pub fn parse_feed(xml: &str) -> Result<Vec<EcbRate>, EcbError> {
 /// # Errors
 /// [`EcbError::Transport`] or [`EcbError::Malformed`].
 pub async fn fetch_last_90_days(http: &reqwest::Client) -> Result<Vec<EcbRate>, EcbError> {
+    fetch(http, ECB_LAST_90_DAYS_URL).await
+}
+
+/// Downloads and parses the full history of reference rates (since 1999).
+///
+/// # Errors
+/// [`EcbError::Transport`] or [`EcbError::Malformed`].
+pub async fn fetch_full_history(http: &reqwest::Client) -> Result<Vec<EcbRate>, EcbError> {
+    fetch(http, ECB_FULL_HISTORY_URL).await
+}
+
+async fn fetch(http: &reqwest::Client, url: &str) -> Result<Vec<EcbRate>, EcbError> {
     let body = http
-        .get(ECB_LAST_90_DAYS_URL)
+        .get(url)
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)

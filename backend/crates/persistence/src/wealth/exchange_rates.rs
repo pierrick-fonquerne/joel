@@ -46,6 +46,19 @@ impl PgExchangeRates {
         }
         Ok(inserted)
     }
+
+    /// Whether no rate is stored yet.
+    ///
+    /// # Errors
+    /// [`WealthError::Storage`].
+    pub async fn is_empty(&self) -> Result<bool, WealthError> {
+        let has_any: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM wealth_exchange_rates)")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| storage(&e))?;
+        Ok(!has_any)
+    }
 }
 
 #[async_trait]
@@ -130,6 +143,17 @@ mod tests {
                 .unwrap(),
             None
         );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn is_empty_tells_whether_any_rate_is_stored(pool: PgPool) {
+        let rates = PgExchangeRates::new(pool);
+        assert!(rates.is_empty().await.unwrap());
+        rates
+            .store_rates(&[(usd(), date!(2026 - 10 - 02), Decimal::new(10_850, 4))])
+            .await
+            .unwrap();
+        assert!(!rates.is_empty().await.unwrap());
     }
 
     #[sqlx::test(migrations = "../../migrations")]

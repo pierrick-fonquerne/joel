@@ -41,7 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timeout(Duration::from_secs(30))
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
-    let mut last_rate_refresh: Option<std::time::Instant> = None;
+    let mut last_rate_success: Option<std::time::Instant> = None;
+    let mut last_rate_failure: Option<std::time::Instant> = None;
 
     tracing::info!("runner started");
     let mut interval = tokio::time::interval(Duration::from_mins(1));
@@ -49,15 +50,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         tokio::select! {
             _ = interval.tick() => {
-                let is_due = last_rate_refresh
-                    .is_none_or(|at| at.elapsed() >= runner::exchange_rate_refresh::REFRESH_INTERVAL);
+                let is_due = runner::exchange_rate_refresh::refresh_due(
+                    last_rate_success,
+                    last_rate_failure,
+                    std::time::Instant::now(),
+                );
                 if let (true, Some(store)) = (is_due, exchange_rates.as_ref()) {
                     match runner::exchange_rate_refresh::refresh(&http, store).await {
                         Ok(inserted) => {
-                            last_rate_refresh = Some(std::time::Instant::now());
+                            last_rate_success = Some(std::time::Instant::now());
+                            last_rate_failure = None;
                             tracing::info!(inserted, "exchange rates refreshed");
                         }
-                        Err(error) => tracing::warn!(%error, "exchange rate refresh failed"),
+                        Err(error) => {
+                            last_rate_failure = Some(std::time::Instant::now());
+                            tracing::warn!(%error, "exchange rate refresh failed");
+                        }
                     }
                 }
             }
