@@ -6,6 +6,7 @@ pub mod money;
 pub mod net_worth;
 pub mod ports;
 pub mod test_support;
+pub mod use_cases;
 pub mod valuation;
 
 pub use account::{Account, AccountId, AccountKind, BrokerageEnvelope, Owner};
@@ -16,4 +17,5 @@ pub use ports::{
     AccountRepository, CipherContext, ExchangeRateSource, FieldCipher, ValuationRepository,
     WrappedKeyStore,
 };
+pub use use_cases::{AccountSummary, NewAccount, Wealth, month_ends};
 pub use valuation::{Valuation, ValuationId, ValuationSource};
