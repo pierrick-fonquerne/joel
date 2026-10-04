@@ -2,9 +2,17 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use std::time::Duration;
+
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
+
+/// Maximum time allowed to establish a connection to Egide.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Maximum time allowed for a whole Egide request.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Egide failures. `Display` never contains a token, a key or a ciphertext.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -48,7 +56,7 @@ struct CiphertextBody<'a> {
 
 #[derive(Deserialize)]
 struct PlaintextAnswer {
-    plaintext: String,
+    plaintext: Zeroizing<String>,
 }
 
 #[derive(Deserialize)]
@@ -58,7 +66,7 @@ struct CiphertextAnswer {
 
 #[derive(Deserialize)]
 struct DatakeyAnswer {
-    plaintext: String,
+    plaintext: Zeroizing<String>,
     ciphertext: String,
 }
 
@@ -66,8 +74,23 @@ impl EgideClient {
     /// Builds a client for `base_url` (for example `http://egide:8200`).
     #[must_use]
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Self {
+        Self::with_timeouts(base_url, token, CONNECT_TIMEOUT, REQUEST_TIMEOUT)
+    }
+
+    fn with_timeouts(
+        base_url: impl Into<String>,
+        token: impl Into<String>,
+        connect: Duration,
+        request: Duration,
+    ) -> Self {
+        let http = reqwest::Client::builder()
+            .connect_timeout(connect)
+            .timeout(request)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             token: Zeroizing::new(token.into()),
         }
@@ -80,7 +103,7 @@ impl EgideClient {
     pub async fn generate_datakey(&self, key_name: &str) -> Result<GeneratedDatakey, EgideError> {
         let answer: DatakeyAnswer = self.post(&format!("datakey/{key_name}"), None).await?;
         Ok(GeneratedDatakey {
-            plaintext: decode_key(&answer.plaintext)?,
+            plaintext: decode_key(answer.plaintext.as_str())?,
             ciphertext: answer.ciphertext,
         })
     }
@@ -100,7 +123,7 @@ impl EgideClient {
                 Some(&CiphertextBody { ciphertext }),
             )
             .await?;
-        decode_key(&answer.plaintext)
+        decode_key(answer.plaintext.as_str())
     }
 
     /// Re-wraps a ciphertext with the latest version of `key_name`.
@@ -265,5 +288,45 @@ mod tests {
             unreachable.decrypt("joel-wealth", "x").await,
             Err(EgideError::Transport(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn slow_answer_times_out_as_transport_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(2))
+                    .set_body_json(serde_json::json!({ "plaintext": KEY_B64 })),
+            )
+            .mount(&server)
+            .await;
+        let client = EgideClient::with_timeouts(
+            server.uri(),
+            "egst_test",
+            Duration::from_millis(200),
+            Duration::from_millis(200),
+        );
+
+        assert!(matches!(
+            client.decrypt("joel-wealth", "x").await,
+            Err(EgideError::Transport(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn errors_never_expose_the_token() {
+        let unreachable = EgideClient::new("http://127.0.0.1:9", "egst_test");
+        let transport = unreachable.decrypt("joel-wealth", "x").await.unwrap_err();
+        for error in [
+            EgideError::Sealed,
+            EgideError::Unauthorized,
+            EgideError::Unexpected(500),
+            EgideError::Malformed,
+            transport,
+        ] {
+            assert!(!error.to_string().contains("egst_test"));
+            assert!(!format!("{error:?}").contains("egst_test"));
+        }
     }
 }
