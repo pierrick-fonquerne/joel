@@ -10,6 +10,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
         <h1 class="shell__brand">Joel</h1>
         <nav>
           <a routerLink="/cockpit" routerLinkActive="active">Cockpit</a>
+          <a routerLink="/patrimoine" routerLinkActive="active">Patrimoine</a>
           <a routerLink="/securite" routerLinkActive="active">Sécurité</a>
           <span class="shell__soon">Agents</span>
           <span class="shell__soon">Routines</span>
