@@ -176,7 +176,7 @@ mod tests {
             net_worth.by_kind[&AccountKind::Loan],
             Money::eur(Decimal::new(-180_000, 0))
         );
-        assert!(net_worth.stale_accounts.is_empty());
+        assert_eq!(net_worth.stale_accounts, Vec::<AccountId>::new());
     }
 
     #[test]
@@ -258,6 +258,6 @@ mod tests {
             &RateTable::default(),
         )
         .unwrap();
-        assert!(net_worth.stale_accounts.is_empty());
+        assert_eq!(net_worth.stale_accounts, Vec::<AccountId>::new());
     }
 }

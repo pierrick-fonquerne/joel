@@ -542,6 +542,9 @@ mod tests {
             month_ends(date!(2026 - 10 - 04), date!(2026 - 10 - 04)),
             vec![date!(2026 - 10 - 04)]
         );
-        assert!(month_ends(date!(2026 - 10 - 04), date!(2026 - 10 - 01)).is_empty());
+        assert_eq!(
+            month_ends(date!(2026 - 10 - 04), date!(2026 - 10 - 01)),
+            Vec::<Date>::new()
+        );
     }
 }
