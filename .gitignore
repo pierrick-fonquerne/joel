@@ -14,3 +14,6 @@ frontend/.angular/
 # Outils locaux
 .superpowers/
 .remember/
+
+# Wealth vault
+deploy/secrets/

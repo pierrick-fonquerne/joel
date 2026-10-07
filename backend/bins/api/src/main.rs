@@ -95,6 +95,21 @@ async fn main() {
         return;
     }
 
+    if args.get(1).map(String::as_str) == Some("rewrap-wealth-key") {
+        let (Some(url), Some(token)) = (&config.egide_url, &config.egide_token) else {
+            tracing::error!("EGIDE_URL and EGIDE_TOKEN_FILE are required");
+            std::process::exit(2);
+        };
+        let client = cipher_egide::EgideClient::new(url.clone(), token.clone());
+        let keys = persistence::wealth::PgWrappedKeys::new(pool);
+        if let Err(error) = cipher_egide::rewrap_stored_key(&client, &keys).await {
+            tracing::error!(%error, "wealth key rewrap failed");
+            std::process::exit(1);
+        }
+        println!("wealth key rewrapped with the latest Egide key version");
+        return;
+    }
+
     let app = match api::build_app(pool, &config).await {
         Ok(router) => router.layer(tower_http::trace::TraceLayer::new_for_http()),
         Err(error) => {

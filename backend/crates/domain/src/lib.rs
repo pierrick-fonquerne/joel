@@ -3,3 +3,4 @@
 
 pub mod auth;
 pub mod knowledge;
+pub mod wealth;

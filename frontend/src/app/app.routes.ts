@@ -19,6 +19,20 @@ export const routes: Routes = [
           import('./features/cockpit/cockpit.component').then((m) => m.CockpitComponent),
       },
       {
+        path: 'patrimoine',
+        loadComponent: () =>
+          import('./features/wealth/wealth-dashboard.component').then((m) => m.WealthDashboardComponent),
+      },
+      {
+        path: 'patrimoine/comptes',
+        loadComponent: () => import('./features/wealth/accounts.component').then((m) => m.AccountsComponent),
+      },
+      {
+        path: 'patrimoine/comptes/:id/releve',
+        loadComponent: () =>
+          import('./features/wealth/valuation-form.component').then((m) => m.ValuationFormComponent),
+      },
+      {
         path: 'securite',
         loadComponent: () =>
           import('./features/settings/security.component').then((m) => m.SecurityComponent),
